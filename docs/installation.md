@@ -31,8 +31,8 @@ The automated setup wizard guides you through environment verification, secret g
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/mytube.git
-cd mytube
+git clone https://github.com/vinaytkere/MyTube-Public.git
+cd MyTube-Public
 
 # 2. Grant execution permissions to setup scripts
 chmod +x deploy/scripts/*.sh
@@ -45,8 +45,8 @@ chmod +x deploy/scripts/*.sh
 
 ```powershell
 # 1. Clone the repository
-git clone https://github.com/your-username/mytube.git
-Set-Location mytube
+git clone https://github.com/vinaytkere/MyTube-Public.git
+Set-Location MyTube-Public
 
 # 2. Run the PowerShell setup script
 .\deploy\scripts\setup.ps1
