@@ -67,7 +67,7 @@ public class VideoSubtitleTests : IDisposable
         var config = new ConfigurationBuilder().Build();
         var videoService = new VideoService(db, config);
 
-        var result = await videoService.GetVideoByIdAsync(video.Id, "testuser", "http://localhost:5000");
+        var result = await videoService.GetVideoByIdAsync(video.Id, "vinay", "http://localhost:5000");
 
         Assert.NotNull(result);
         Assert.Equal(2, result.SubtitleTracks.Count);
@@ -112,7 +112,7 @@ public class VideoSubtitleTests : IDisposable
         var config = new ConfigurationBuilder().Build();
         var videoService = new VideoService(db, config);
 
-        var result = await videoService.GetVideoByIdAsync(video.Id, "testuser", "http://localhost:5000");
+        var result = await videoService.GetVideoByIdAsync(video.Id, "vinay", "http://localhost:5000");
 
         Assert.NotNull(result);
         Assert.Empty(result.SubtitleTracks);
@@ -153,7 +153,7 @@ public class VideoSubtitleTests : IDisposable
         var config = new ConfigurationBuilder().Build();
         var videoService = new VideoService(db, config);
 
-        var result = await videoService.GetVideoByIdAsync(video.Id, "testuser", "http://localhost:5000");
+        var result = await videoService.GetVideoByIdAsync(video.Id, "vinay", "http://localhost:5000");
 
         Assert.NotNull(result);
         Assert.Equal(2, result.SubtitleTracks.Count);
@@ -170,4 +170,78 @@ public class VideoSubtitleTests : IDisposable
         Assert.Equal("English (Auto-generated)", secondTrack.Label);
         Assert.False(secondTrack.IsDefault);
     }
+
+    [Fact]
+    public async Task GetVideoById_WhenAudioTracksJsonEmpty_SelfHealsByProbingMediaProcessor()
+    {
+        var options = new DbContextOptionsBuilder<VideoDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        var videoFile = Path.Combine(_tempDir, "multi_audio_clip.mp4");
+        File.WriteAllText(videoFile, "dummy media");
+
+        using var db = new VideoDbContext(options);
+        var category = new Category { Name = "Movies", CreatedAt = DateTime.UtcNow };
+        db.Categories.Add(category);
+        await db.SaveChangesAsync();
+
+        var video = new Video
+        {
+            Id = Guid.NewGuid(),
+            FileName = "multi_audio_clip.mp4",
+            FilePath = videoFile,
+            DisplayTitle = "Multi Audio Clip",
+            CategoryId = category.Id,
+            ScanStatus = ScanState.Ready,
+            AudioTracksJson = "[]", // Simulates existing video before audio track scanning
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Videos.Add(video);
+        await db.SaveChangesAsync();
+
+        var mockProcessor = new MockMultiAudioProcessor();
+        var config = new ConfigurationBuilder().Build();
+        var videoService = new VideoService(db, config, mockProcessor);
+
+        var result = await videoService.GetVideoByIdAsync(video.Id, "vinay", "http://localhost:5000");
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.AudioTracks);
+        Assert.Equal(2, result.AudioTracks.Count);
+        Assert.Equal("English", result.AudioTracks[0].Title);
+        Assert.Equal("Hindi", result.AudioTracks[1].Title);
+
+        // Verify it self-healed in database as well
+        var updatedInDb = await db.Videos.FindAsync(video.Id);
+        Assert.NotNull(updatedInDb);
+        Assert.Contains("Hindi", updatedInDb.AudioTracksJson);
+        Assert.Contains("English", updatedInDb.AudioTracksJson);
+    }
+}
+
+public class MockMultiAudioProcessor : IMediaProcessor
+{
+    public string ResolvePhysicalFilePath(string filePath) => filePath;
+
+    public Task<VideoMetadata?> ExtractMetadataAsync(string filePath)
+    {
+        return Task.FromResult<VideoMetadata?>(new VideoMetadata
+        {
+            Duration = 100,
+            Width = 1920,
+            Height = 1080,
+            VideoCodec = "h264",
+            AudioCodec = "aac",
+            AudioTracks = new List<AudioTrackInfo>
+            {
+                new() { Index = 0, Language = "eng", Title = "English", Codec = "aac" },
+                new() { Index = 1, Language = "hin", Title = "Hindi", Codec = "aac" }
+            }
+        });
+    }
+
+    public Task<bool> GenerateThumbnailAsync(string filePath, string destinationThumbnailPath, double offsetSeconds = 5) => Task.FromResult(true);
+
+    public Task<List<string>> ExtractAudioChunksAsync(string filePath, string tempDir) => Task.FromResult(new List<string>());
 }

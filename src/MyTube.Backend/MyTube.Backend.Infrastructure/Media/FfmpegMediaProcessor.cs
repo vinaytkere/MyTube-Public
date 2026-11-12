@@ -400,10 +400,21 @@ public class FfmpegMediaProcessor : IMediaProcessor
                 {
                     var s = audioStreams[i];
                     var lang = s.Tags != null && s.Tags.TryGetValue("language", out var l) ? l : "";
-                    var titleTag = s.Tags != null && s.Tags.TryGetValue("title", out var t) ? t : (s.Tags != null && s.Tags.TryGetValue("handler_name", out var h) ? h : "");
-                    var displayTitle = !string.IsNullOrWhiteSpace(titleTag)
-                        ? titleTag
-                        : (!string.IsNullOrWhiteSpace(lang) ? lang.ToUpperInvariant() : $"Audio {i + 1}");
+
+                    string? trackTitle = null;
+                    if (s.Tags != null)
+                    {
+                        if (s.Tags.TryGetValue("title", out var t) && !string.IsNullOrWhiteSpace(t) && !IsInternalHandlerName(t))
+                            trackTitle = t.Trim();
+                        else if (s.Tags.TryGetValue("name", out var n) && !string.IsNullOrWhiteSpace(n) && !IsInternalHandlerName(n))
+                            trackTitle = n.Trim();
+                        else if (s.Tags.TryGetValue("handler_name", out var h) && !string.IsNullOrWhiteSpace(h) && !IsInternalHandlerName(h))
+                            trackTitle = h.Trim();
+                    }
+
+                    var displayTitle = !string.IsNullOrWhiteSpace(trackTitle)
+                        ? trackTitle
+                        : (!string.IsNullOrWhiteSpace(lang) ? FormatAudioLanguageDisplayName(lang) : $"Audio Track {i + 1}");
 
                     audioTracks.Add(new AudioTrackInfo
                     {
@@ -548,6 +559,47 @@ public class FfmpegMediaProcessor : IMediaProcessor
             }
         }
         return string.Join(" ", words);
+    }
+
+    private static bool IsInternalHandlerName(string name)
+    {
+        return name.Equals("SoundHandler", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("VideoHandler", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("SubtitleHandler", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatAudioLanguageDisplayName(string code)
+    {
+        var lower = code.ToLowerInvariant().Trim();
+        return lower switch
+        {
+            "en" or "eng" or "en-us" or "en-gb" => "English",
+            "hi" or "hin" => "Hindi",
+            "es" or "spa" or "es-us" or "es-es" => "Spanish",
+            "de" or "deu" or "ger" or "de-de" => "German",
+            "fr" or "fra" or "fre" or "fr-fr" => "French",
+            "it" or "ita" => "Italian",
+            "ja" or "jpn" => "Japanese",
+            "pt" or "por" or "pt-br" or "pt-pt" => "Portuguese",
+            "ru" or "rus" => "Russian",
+            "zh" or "zho" or "chi" => "Chinese",
+            "ar" or "ara" => "Arabic",
+            "bn" or "ben" => "Bengali",
+            "id" or "ind" => "Indonesian",
+            "ko" or "kor" => "Korean",
+            "pl" or "pol" => "Polish",
+            "tr" or "tur" => "Turkish",
+            "uk" or "ukr" => "Ukrainian",
+            "vi" or "vie" => "Vietnamese",
+            "kn" or "kan" => "Kannada",
+            "ta" or "tam" => "Tamil",
+            "te" or "tel" => "Telugu",
+            "mr" or "mar" => "Marathi",
+            "ml" or "mal" => "Malayalam",
+            "gu" or "guj" => "Gujarati",
+            "pa" or "pan" => "Punjabi",
+            _ => code.ToUpperInvariant()
+        };
     }
 
     private class FFprobeResult

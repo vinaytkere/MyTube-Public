@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using MyTube.Backend.Application;
 using MyTube.Backend.Domain;
 using MyTube.Backend.Infrastructure.Media;
@@ -15,11 +16,19 @@ public class VideoService : IVideoService
 {
     private readonly VideoDbContext _dbContext;
     private readonly string _mediaRoot;
+    private readonly IMediaProcessor? _mediaProcessor;
+    private readonly ILogger<VideoService>? _logger;
 
-    public VideoService(VideoDbContext dbContext, IConfiguration configuration)
+    public VideoService(
+        VideoDbContext dbContext, 
+        IConfiguration configuration,
+        IMediaProcessor? mediaProcessor = null,
+        ILogger<VideoService>? logger = null)
     {
         _dbContext = dbContext;
         _mediaRoot = configuration["Media:RootPath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "media");
+        _mediaProcessor = mediaProcessor;
+        _logger = logger;
     }
 
     public async Task<PagedResult<VideoDto>> GetVideosAsync(
@@ -121,6 +130,43 @@ public class VideoService : IVideoService
             .FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
 
         if (video == null) return null;
+
+        if (_mediaProcessor != null && (string.IsNullOrWhiteSpace(video.AudioTracksJson) || video.AudioTracksJson == "[]"))
+        {
+            var physicalPath = _mediaProcessor.ResolvePhysicalFilePath(video.FilePath);
+            if (System.IO.File.Exists(physicalPath))
+            {
+                try
+                {
+                    var meta = await _mediaProcessor.ExtractMetadataAsync(physicalPath);
+                    if (meta != null && meta.AudioTracks != null && meta.AudioTracks.Count > 0)
+                    {
+                        video.AudioTracksJson = System.Text.Json.JsonSerializer.Serialize(meta.AudioTracks);
+                        if (!string.IsNullOrWhiteSpace(meta.AudioCodec))
+                        {
+                            video.AudioCodec = meta.AudioCodec;
+                        }
+                        if (!string.IsNullOrWhiteSpace(meta.VideoCodec))
+                        {
+                            video.VideoCodec = meta.VideoCodec;
+                        }
+
+                        var dbVid = await _dbContext.Videos.FirstOrDefaultAsync(v => v.Id == video.Id, cancellationToken);
+                        if (dbVid != null)
+                        {
+                            dbVid.AudioTracksJson = video.AudioTracksJson;
+                            dbVid.AudioCodec = video.AudioCodec;
+                            dbVid.VideoCodec = video.VideoCodec;
+                            await _dbContext.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed on-the-fly audio probe for video {VideoId}", video.Id);
+                }
+            }
+        }
 
         var progress = await _dbContext.WatchProgresses
             .AsNoTracking()

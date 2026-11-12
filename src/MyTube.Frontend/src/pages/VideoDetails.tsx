@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Star, Folder, Calendar, Cpu, HardDrive, Info, AlertCircle, RefreshCw, FolderPlus, ExternalLink, Edit2, Trash2, ArrowLeft, Sparkles, Tag, Globe, FileText, ChevronDown, ChevronUp, Copy, Check, Download } from 'lucide-react';
+import { Star, Folder, Calendar, Cpu, HardDrive, Info, AlertCircle, RefreshCw, FolderPlus, ExternalLink, Edit2, Trash2, ArrowLeft, Sparkles, Tag, Globe, FileText, ChevronDown, ChevronUp, Copy, Check, Download, Volume2 } from 'lucide-react';
 import { MessageSquare, Send, Search, HelpCircle, Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 import { Video, Category, VideoQa } from '../types';
@@ -459,9 +459,9 @@ export const VideoDetails: React.FC<VideoDetailsProps> = ({ currentUser, onColla
                 {video.displayTitle}
               </h1>
 
-              {/* Audio MP3 Pill Badge with pencil icon matching Image 1 */}
+              {/* Media Format / Quality Badge */}
               <div className="flex items-center gap-1.5 bg-[#3cd69b]/10 border border-[#3cd69b]/30 text-[#3cd69b] px-3 py-1 rounded-xl text-xs font-bold">
-                <span>Audio MP3</span>
+                <span>{video.fileName.toLowerCase().endsWith('.mp3') || video.height === 0 ? 'Audio MP3' : (video.quality || 'Video')}</span>
                 {currentUser?.role === 'Administrator' && (
                   <button
                     onClick={() => {
@@ -475,6 +475,15 @@ export const VideoDetails: React.FC<VideoDetailsProps> = ({ currentUser, onColla
                   </button>
                 )}
               </div>
+
+              {/* Multi-Audio Tracks indicator */}
+              {video.audioTracks && video.audioTracks.length > 1 && (
+                <div className="flex items-center gap-1.5 bg-[#121418] border border-[#3cd69b]/50 text-[#3cd69b] px-3 py-1 rounded-xl text-xs font-bold shadow-md">
+                  <Volume2 size={13} className="shrink-0" />
+                  <span className="text-neutral-400 font-normal">Audio:</span>
+                  <span className="text-white">{video.audioTracks.map(t => t.title || (t.language ? t.language.toUpperCase() : `Track ${t.index + 1}`)).join(' • ')}</span>
+                </div>
+              )}
             </div>
 
             {/* Category & Added Metadata line matching Image 1 */}

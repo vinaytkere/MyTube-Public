@@ -1936,6 +1936,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
             args.Add(formatSelector);
             args.Add("--merge-output-format");
             args.Add("mkv/mp4");
+            args.Add("--embed-metadata");
             if (!string.IsNullOrWhiteSpace(audioLanguage) && audioLanguage.Contains(','))
             {
                 args.Add("--audio-multistreams");
@@ -2392,6 +2393,23 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
                 try { await dbContext.SaveChangesAsync(); } catch { }
             }
 
+            VideoMetadata? meta = null;
+            try
+            {
+                meta = await _mediaProcessor.ExtractMetadataAsync(filePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed extracting media metadata for {FilePath} during registration", filePath);
+            }
+
+            long fileSize = 0;
+            try
+            {
+                if (File.Exists(filePath)) fileSize = new FileInfo(filePath).Length;
+            }
+            catch { }
+
             var existing = await dbContext.Videos.FirstOrDefaultAsync(v => v.FilePath == filePath);
             if (existing == null)
             {
@@ -2399,7 +2417,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
                 {
                     FilePath = filePath,
                     FileName = Path.GetFileName(filePath),
-                    DisplayTitle = Path.GetFileNameWithoutExtension(filePath),
+                    DisplayTitle = !string.IsNullOrWhiteSpace(meta?.DisplayTitle) ? meta.DisplayTitle : Path.GetFileNameWithoutExtension(filePath),
                     CategoryId = category.Id,
                     ScanStatus = ScanState.Ready,
                     SourceUrl = sourceUrl,
@@ -2407,7 +2425,16 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
                     Uploader = uploader,
                     Transcript = transcript,
                     CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    UpdatedAt = DateTime.UtcNow,
+                    Duration = meta?.Duration ?? 0,
+                    Width = meta?.Width ?? 0,
+                    Height = meta?.Height ?? 0,
+                    VideoCodec = meta?.VideoCodec,
+                    AudioCodec = meta?.AudioCodec,
+                    ContainerFormat = meta?.ContainerFormat,
+                    FrameRate = meta?.FrameRate ?? 0,
+                    AudioTracksJson = meta?.AudioTracks != null ? System.Text.Json.JsonSerializer.Serialize(meta.AudioTracks) : "[]",
+                    FileSize = fileSize
                 };
                 dbContext.Videos.Add(newVideo);
                 await dbContext.SaveChangesAsync();
@@ -2420,6 +2447,18 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
                 if (!string.IsNullOrWhiteSpace(description)) existing.RawDescription = description;
                 if (!string.IsNullOrWhiteSpace(uploader)) existing.Uploader = uploader;
                 if (!string.IsNullOrWhiteSpace(transcript)) existing.Transcript = transcript;
+                if (meta != null)
+                {
+                    existing.Duration = meta.Duration;
+                    existing.Width = meta.Width;
+                    existing.Height = meta.Height;
+                    existing.VideoCodec = meta.VideoCodec;
+                    existing.AudioCodec = meta.AudioCodec;
+                    existing.ContainerFormat = meta.ContainerFormat;
+                    existing.FrameRate = meta.FrameRate;
+                    existing.AudioTracksJson = System.Text.Json.JsonSerializer.Serialize(meta.AudioTracks);
+                }
+                if (fileSize > 0) existing.FileSize = fileSize;
                 existing.UpdatedAt = DateTime.UtcNow;
                 await dbContext.SaveChangesAsync();
                 return existing.Id;

@@ -33,6 +33,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
   const [selectedAudioTrack, setSelectedAudioTrack] = useState<number>(0);
   const startPosition = video.progressSeconds || 0;
   const [transcodeStart, setTranscodeStart] = useState<number>(startPosition);
+  const [resumePosition, setResumePosition] = useState<number>(startPosition);
   const [, setIsPaused] = useState<boolean>(true);
 
   // Check if browser natively supports the video format directly without backend remuxing
@@ -83,8 +84,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
   useEffect(() => {
     lastUpdatedTimeRef.current = 0;
     setTranscodeStart(startPosition);
+    setResumePosition(startPosition);
     setSelectedAudioTrack(0);
   }, [video.id, startPosition]);
+
+  const handleAudioTrackChange = (trackIdx: number) => {
+    const curr = playerRef.current ? playerRef.current.currentTime : 0;
+    const currentActualTime = isNative ? curr : (transcodeStart + curr);
+    setSelectedAudioTrack(trackIdx);
+    setTranscodeStart(currentActualTime);
+    setResumePosition(currentActualTime);
+  };
 
   const handleTimeUpdate = (detail: MediaTimeUpdateEventDetail) => {
     const curr = detail.currentTime;
@@ -133,32 +143,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
     };
   }, [saveProgress]);
 
+  const audioTrackSelector = video.audioTracks && video.audioTracks.length > 1 ? (
+    <div className="flex items-center gap-1.5 text-xs bg-[#121418]/95 hover:bg-[#171920] border border-[#3cd69b]/60 rounded-lg px-2.5 py-1 text-white backdrop-blur-md transition-all shadow-lg pointer-events-auto">
+      <Volume2 size={13} className="text-[#3cd69b] shrink-0" />
+      <span className="text-[10px] font-mono text-[#3cd69b] font-bold uppercase hidden sm:inline">Audio:</span>
+      <select
+        value={selectedAudioTrack}
+        onChange={(e) => handleAudioTrackChange(parseInt(e.target.value, 10))}
+        className="bg-transparent border-none outline-none text-xs font-semibold text-white cursor-pointer pr-1 focus:ring-0"
+        aria-label="Switch Audio Language Track"
+        title="Switch Audio Language Track"
+      >
+        {video.audioTracks.map((track) => (
+          <option key={track.index} value={track.index} className="bg-[#121418] text-white">
+            {track.title || (track.language ? track.language.toUpperCase() : `Track ${track.index + 1}`)}
+          </option>
+        ))}
+      </select>
+    </div>
+  ) : null;
+
   const topControlsContent = (
     <div className="flex items-center gap-2 pointer-events-auto">
-      {video.audioTracks && video.audioTracks.length > 1 && (
-        <div className="flex items-center gap-1.5 text-xs bg-black/80 border border-[#21242d] rounded-lg px-2.5 py-1 text-neutral-300 backdrop-blur-md transition-all shadow-md">
-          <Volume2 size={13} className="text-[#3cd69b] shrink-0" />
-          <select
-            value={selectedAudioTrack}
-            onChange={(e) => {
-              const trackIdx = parseInt(e.target.value, 10);
-              setSelectedAudioTrack(trackIdx);
-              if (playerRef.current) {
-                const curr = playerRef.current.currentTime;
-                setTranscodeStart(isNative ? curr : (transcodeStart + curr));
-              }
-            }}
-            className="bg-transparent border-none outline-none text-xs font-semibold text-neutral-200 cursor-pointer pr-1"
-          >
-            {video.audioTracks.map((track) => (
-              <option key={track.index} value={track.index} className="bg-[#121418] text-neutral-200">
-                {track.title || track.language.toUpperCase() || `Track ${track.index}`}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
+      {audioTrackSelector}
       <span className="text-[10px] font-mono-telemetry font-bold border border-[#21242d] bg-[#0c0e12]/90 backdrop-blur-md text-[#3cd69b] px-2 py-0.5 rounded-md uppercase select-none tracking-widest hidden sm:inline-block">
         {isNative ? 'Native Direct Play' : 'FFmpeg Remuxing'}
       </span>
@@ -183,30 +190,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
         </div>
 
         <div className="flex items-center gap-2">
-          {video.audioTracks && video.audioTracks.length > 1 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#121418] border border-[#3cd69b]/60 text-white shadow-lg">
-              <Volume2 size={13} className="text-[#3cd69b] shrink-0" />
-              <span className="text-[10px] font-mono uppercase text-[#3cd69b] font-bold">Audio:</span>
-              <select
-                value={selectedAudioTrack}
-                onChange={(e) => {
-                  const trackIdx = parseInt(e.target.value, 10);
-                  setSelectedAudioTrack(trackIdx);
-                  if (playerRef.current) {
-                    const curr = playerRef.current.currentTime;
-                    setTranscodeStart(isNative ? curr : (transcodeStart + curr));
-                  }
-                }}
-                className="bg-transparent border-none outline-none text-xs font-semibold text-white cursor-pointer pr-1 focus:ring-0"
-              >
-                {video.audioTracks.map((track) => (
-                  <option key={track.index} value={track.index} className="bg-[#121418] text-white">
-                    {track.title || track.language.toUpperCase() || `Track ${track.index + 1}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {audioTrackSelector}
 
           <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#121418] border border-[#21242d] text-cyan-400 text-[11px]">
             <Sparkles size={12} />
@@ -267,6 +251,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
                 colorScheme="dark"
                 download={downloadUrl}
                 slots={{
+                  afterVolumeSlider: audioTrackSelector,
                   topControlsGroupEnd: topControlsContent,
                 }}
               />
@@ -285,7 +270,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
             aspectRatio="16/9"
             load="eager"
             preload="auto"
-            currentTime={isNative && shouldResume ? startPosition : undefined}
+            currentTime={isNative ? (resumePosition > 0 ? resumePosition : (shouldResume ? startPosition : undefined)) : undefined}
             autoPlay
             playsInline
             crossOrigin="anonymous"
@@ -321,6 +306,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
               colorScheme="dark"
               download={downloadUrl}
               slots={{
+                afterVolumeSlider: audioTrackSelector,
+                beforeCaptionButton: audioTrackSelector,
                 topControlsGroupEnd: topControlsContent,
               }}
             />

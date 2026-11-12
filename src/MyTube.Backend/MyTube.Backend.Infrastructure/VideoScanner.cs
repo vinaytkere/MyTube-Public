@@ -151,11 +151,13 @@ public class VideoScanner : IVideoScanner
 
                 if (dbVideoMap.TryGetValue(filePath, out var existingVideo))
                 {
-                    // Check if file has changed or if it was left in an incomplete status (Processing/Discovered)
+                    // Check if file has changed, was left in an incomplete status, or is missing audio tracks
                     if (existingVideo.FileSize != fileInfo.Length || 
                         existingVideo.LastModified != fileInfo.LastWriteTimeUtc ||
                         existingVideo.ScanStatus == ScanState.Processing ||
-                        existingVideo.ScanStatus == ScanState.Discovered)
+                        existingVideo.ScanStatus == ScanState.Discovered ||
+                        string.IsNullOrWhiteSpace(existingVideo.AudioTracksJson) ||
+                        existingVideo.AudioTracksJson == "[]")
                     {
                         _logger.LogInformation($"File needs processing: {filePath} (Status: {existingVideo.ScanStatus})");
                         existingVideo.FileSize = fileInfo.Length;
