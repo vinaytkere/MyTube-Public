@@ -1,0 +1,20 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:10.9.11
+    container_name: mytube-jellyfin
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    environment:
+      - JELLYFIN_PublishedServerUrl=http://localhost:8096
+    volumes:
+      - ${DATA_DIR:-./data}/jellyfin-config:/config
+      - ${DATA_DIR:-./data}/jellyfin-cache:/cache
+      - ${MEDIA_DIR:-./media}:/media:ro
+    networks:
+      - mytube-network
+
+networks:
+  mytube-network:
+    external: true
+

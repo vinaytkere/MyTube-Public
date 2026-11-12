@@ -1,0 +1,65 @@
+@baseUrl = http://localhost:5003
+@authToken = {{login.response.body.token}}
+
+### Health Check (Database)
+GET {{baseUrl}}/health
+
+### Health Check (Media Tools & Storage)
+GET {{baseUrl}}/health/media-tools
+
+### OpenAPI JSON Document (Native .NET 10)
+GET {{baseUrl}}/openapi/v1.json
+
+### Scalar Interactive API Reference
+GET {{baseUrl}}/scalar/v1
+
+### Auth - Login
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "ChangeMe123!"
+}
+
+### Auth - Current User Profile
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{authToken}}
+
+### Categories - Get All Categories
+GET {{baseUrl}}/api/categories
+Authorization: Bearer {{authToken}}
+
+### Categories - Create Category
+POST {{baseUrl}}/api/categories
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Science & Tech"
+}
+
+### Videos - Get Paginated Video List
+GET {{baseUrl}}/api/videos?page=1&pageSize=20
+Authorization: Bearer {{authToken}}
+
+### Videos - Search Videos by Keyword
+GET {{baseUrl}}/api/videos?search=tutorial&page=1&pageSize=10
+Authorization: Bearer {{authToken}}
+
+### Videos - Continue Watching
+GET {{baseUrl}}/api/videos/continue-watching?limit=6
+Authorization: Bearer {{authToken}}
+
+### Videos - Favorites
+GET {{baseUrl}}/api/videos/favorites
+Authorization: Bearer {{authToken}}
+
+### Downloader - Get Active & Historical Jobs
+GET {{baseUrl}}/api/downloader/jobs
+Authorization: Bearer {{authToken}}
+
+### Settings - Get Current Downloader Settings
+GET {{baseUrl}}/api/settings
+Authorization: Bearer {{authToken}}

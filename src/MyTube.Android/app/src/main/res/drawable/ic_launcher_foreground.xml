@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer neon ring -->
+    <path
+        android:strokeColor="#FF7A00"
+        android:strokeWidth="3"
+        android:pathData="M54,20 A34,34 0 1,1 53.9,20 Z" />
+    <!-- Cyan accent notch -->
+    <path
+        android:strokeColor="#00EEFC"
+        android:strokeWidth="3"
+        android:pathData="M54,20 A34,34 0 0,1 88,54" />
+    <!-- Play Triangle -->
+    <path
+        android:fillColor="#FF7A00"
+        android:pathData="M46,38 L68,54 L46,70 Z" />
+</vector>

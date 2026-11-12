@@ -1,0 +1,53 @@
+name: CI - Build and Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  backend-test:
+    name: Backend Build & Tests (.NET 10)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore MyTube.slnx
+
+      - name: Build Backend
+        run: dotnet build MyTube.slnx --configuration Release --no-restore
+
+      - name: Run Tests
+        run: dotnet test MyTube.slnx --configuration Release --no-build --verbosity normal
+
+  frontend-build:
+    name: Frontend Build & Typecheck (Vite + TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/MyTube.Frontend
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: src/MyTube.Frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Frontend
+        run: npm run build
+

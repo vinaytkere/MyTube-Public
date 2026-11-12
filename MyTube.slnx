@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/MyTube.Backend/">
+    <Project Path="src/MyTube.Backend/MyTube.Backend.Api/MyTube.Backend.Api.csproj" />
+    <Project Path="src/MyTube.Backend/MyTube.Backend.Application/MyTube.Backend.Application.csproj" />
+    <Project Path="src/MyTube.Backend/MyTube.Backend.Domain/MyTube.Backend.Domain.csproj" />
+    <Project Path="src/MyTube.Backend/MyTube.Backend.Infrastructure/MyTube.Backend.Infrastructure.csproj" />
+    <Project Path="src/MyTube.Backend/MyTube.Backend.Tests/MyTube.Backend.Tests.csproj" />
+  </Folder>
+</Solution>

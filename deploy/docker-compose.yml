@@ -1,0 +1,54 @@
+services:
+  mytube:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: mytube:latest
+    container_name: mytube
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5003}:5003"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - PORT=5003
+      - DATA_DIR=/app/data
+      - Media__RootPath=/app/media
+      - Media__CachePath=/app/cache
+      - SECRETS_PATH=/run/secrets
+      - Cors__AllowedOrigins__0=http://localhost:${PORT:-5003}
+      - Cors__AllowedOrigins__1=http://127.0.0.1:${PORT:-5003}
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+      - ${MEDIA_DIR:-./media}:/app/media
+    secrets:
+      - jwt_secret
+      - optional_encryption_key
+      - optional_gemini_api_key
+      - optional_groq_api_key
+      - optional_deepseek_api_key
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - mytube-network
+
+secrets:
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  optional_encryption_key:
+    file: ./secrets/encryption_key.txt
+  optional_gemini_api_key:
+    file: ./secrets/gemini_api_key.txt
+  optional_groq_api_key:
+    file: ./secrets/groq_api_key.txt
+  optional_deepseek_api_key:
+    file: ./secrets/deepseek_api_key.txt
+
+networks:
+  mytube-network:
+    name: mytube-network
+    driver: bridge
+

@@ -1,0 +1,224 @@
+@import "tailwindcss";
+
+@layer theme {
+  :root {
+    --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-body: 'Inter', system-ui, sans-serif;
+  }
+}
+
+.font-heading {
+  font-family: var(--font-heading, 'Plus Jakarta Sans', sans-serif);
+}
+
+.font-mono-telemetry {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+/* Custom Scrollbar for premium dark feel */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090a0c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e2129;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3cd69b;
+}
+
+/* Dark color scheme for native inputs, scrollbars, and select dropdowns */
+html {
+  color-scheme: dark;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Base Body Styles matching Stitch Obsidian Cybernetic Aesthetic */
+body {
+  background-color: #090a0c;
+  color: #e2e2e8;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Obsidian Cybernetic Surfaces & Accent System */
+.bg-surface-lowest {
+  background-color: #0c0e12;
+}
+
+.bg-surface-low {
+  background-color: #1a1c20;
+}
+
+.bg-surface-main {
+  background-color: #121418;
+}
+
+.bg-surface-high {
+  background-color: #282a2e;
+}
+
+.bg-surface-highest {
+  background-color: #333539;
+}
+
+.text-cyber-mint {
+  color: #3cd69b;
+}
+
+.bg-cyber-mint {
+  background-color: #3cd69b;
+}
+
+.border-cyber-mint {
+  border-color: #3cd69b;
+}
+
+.text-neon-cyan {
+  color: #38bdf8;
+}
+
+.bg-neon-cyan {
+  background-color: #38bdf8;
+}
+
+/* Focus Rim Glow State from Stitch DESIGN.md */
+.focus-neon:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px #3cd69b, 0 0 20px -2px rgba(60, 214, 155, 0.35);
+}
+
+.neon-border-hover:hover {
+  border-color: #3cd69b;
+  box-shadow: 0 0 16px -2px rgba(60, 214, 155, 0.25);
+}
+
+/* Dark Emerald Visual Accents */
+.bg-dark-app {
+  background-color: #090a0c;
+}
+
+.bg-dark-card {
+  background-color: #121418;
+}
+
+.bg-dark-card-hover:hover {
+  background-color: #171920;
+}
+
+.border-dark-border {
+  border-color: #21242d;
+}
+
+.text-emerald-primary {
+  color: #3cd69b;
+}
+
+.bg-emerald-primary {
+  background-color: #3cd69b;
+}
+
+.bg-emerald-primary:hover {
+  background-color: #34c78f;
+}
+
+.border-emerald-primary {
+  border-color: #3cd69b;
+}
+
+/* Matrix & Grid Pattern Backgrounds for Auth & Hero Covers */
+.bg-grid-pattern {
+  background-image: radial-gradient(rgba(60, 214, 155, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.bg-server-cover {
+  background: linear-gradient(135deg, rgba(9, 10, 12, 0.8) 0%, rgba(18, 20, 24, 0.6) 100%),
+              radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.15), transparent 70%),
+              url('https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1920&q=80');
+  background-size: cover;
+  background-position: center;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(18, 20, 24, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.glass-header {
+  background: rgba(9, 10, 12, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Custom CSS for Vidstack Video Player */
+[data-media-player] {
+  --video-brand: #3cd69b;
+  --media-brand: #3cd69b;
+  --audio-brand: #3cd69b;
+  --video-focus-ring-color: rgba(60, 214, 155, 0.4);
+  --audio-focus-ring-color: rgba(60, 214, 155, 0.4);
+  --video-border: 1px solid #21242d;
+  --video-border-radius: 12px;
+  --audio-border: 1px solid #21242d;
+  --audio-border-radius: 12px;
+}
+
+.video-player-container {
+  background-color: #000;
+}
+
+.video-player-container [data-media-provider] video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #000;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(60, 214, 155, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(60, 214, 155, 0.4); }
+}
+
+.emerald-glow {
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+/* Accessibility: respect user prefers-reduced-motion settings */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

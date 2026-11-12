@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">NovaPlayer</string>
+    <string name="media_library">Media Library</string>
+    <string name="playlists">Playlists</string>
+    <string name="playing">Playing</string>
+    <string name="tools">Tools</string>
+    <string name="playback_channel_name">Media Playback</string>
+    <string name="playback_channel_description">Notifications for active video and audio playback</string>
+    <string name="downloads_channel_name">Media Downloads</string>
+    <string name="downloads_channel_description">Notifications for file download progress</string>
+</resources>
