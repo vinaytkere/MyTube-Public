@@ -57,10 +57,10 @@ public class FormatSelectorTests
     }
 
     [Fact]
-    public void BuildFormatSelector_WithAllAudioLanguages_GeneratesMergeallSelector()
+    public void BuildFormatSelector_WithAllAudioLanguages_FallsBackToDefaultBestAudio()
     {
         var result = DownloadManager.BuildFormatSelector(null, OutputFormat.Mp4, "all");
-        const string expected = "bestvideo+mergeall[vcodec=none]/bestvideo+bestaudio/best";
+        const string expected = "bestvideo[ext=mp4]+bestaudio/best";
         Assert.Equal(expected, result);
     }
 
@@ -68,6 +68,14 @@ public class FormatSelectorTests
     public void BuildFormatSelector_WithMultipleCommaSeparatedAudioLanguages_GeneratesMultiAudioSelector()
     {
         var result = DownloadManager.BuildFormatSelector("1080p", OutputFormat.Mp4, "en,es");
+        const string expected = "bestvideo[height<=1080]+bestaudio[language=en]+bestaudio[language=es]/bestvideo[height<=1080]+bestaudio/best";
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void BuildFormatSelector_WithThreeCommaSeparatedAudioLanguages_LimitsToMaxTwo()
+    {
+        var result = DownloadManager.BuildFormatSelector("1080p", OutputFormat.Mp4, "en,es,hi");
         const string expected = "bestvideo[height<=1080]+bestaudio[language=en]+bestaudio[language=es]/bestvideo[height<=1080]+bestaudio/best";
         Assert.Equal(expected, result);
     }
@@ -82,10 +90,19 @@ public class FormatSelectorTests
     }
 
     [Fact]
-    public void NormalizeSubtitleLanguage_WhenAll_ReturnsExclusionsForMachineTranslatedSubs()
+    public void NormalizeSubtitleLanguage_WhenAll_ReturnsSafePrimarySubs()
     {
-        const string safeAllSubs = "all,-live_chat,-.*-.*,.*-orig,en-US,en-GB,es-419,pt-BR,pt-PT,zh-Hans,zh-Hant";
-        Assert.Equal(safeAllSubs, DownloadManager.NormalizeSubtitleLanguage("all"));
+        Assert.Equal("en-orig,en", DownloadManager.NormalizeSubtitleLanguage("all"));
+    }
+
+    [Fact]
+    public void NormalizeSubtitleLanguage_WhenMultipleCommaSeparatedLanguages_NormalizesEachAndLimitsToTwo()
+    {
+        var result = DownloadManager.NormalizeSubtitleLanguage("en,es");
+        Assert.Equal("en-orig,en,en-US,en-GB,es-orig,es,es-419,es-ES", result);
+
+        var resultThree = DownloadManager.NormalizeSubtitleLanguage("en,es,fr");
+        Assert.Equal("en-orig,en,en-US,en-GB,es-orig,es,es-419,es-ES", resultThree);
     }
 
     [Fact]
@@ -120,18 +137,19 @@ public class FormatSelectorTests
     }
 
     [Fact]
-    public void NormalizeSubtitleLanguage_WithProbeAndAll_ReturnsDiscoveredProbeCodes()
+    public void NormalizeSubtitleLanguage_WithProbeAndAll_LimitsToMaxTwoProbeCodes()
     {
         var probe = new VideoProbeResultDto
         {
             SubtitleTracks = new()
             {
                 new MediaTrackInfoDto { Code = "en", Name = "English" },
-                new MediaTrackInfoDto { Code = "fr", Name = "French" }
+                new MediaTrackInfoDto { Code = "fr", Name = "French" },
+                new MediaTrackInfoDto { Code = "de", Name = "German" }
             }
         };
 
         var result = DownloadManager.NormalizeSubtitleLanguage("all", probe);
-        Assert.Equal("en,fr", result);
+        Assert.Equal("en-orig,en,en-US,en-GB,fr-orig,fr", result);
     }
 }

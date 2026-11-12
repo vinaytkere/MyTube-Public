@@ -61,9 +61,9 @@ export const VideoDownloader: React.FC = () => {
   const [audioFormat, setAudioFormat] = useState<'Mp3' | 'M4a' | 'Opus' | 'Wav'>('Mp3');
   const [videoQuality, setVideoQuality] = useState<string>('Top Quality Available (Default)');
   const [includeSubtitles, setIncludeSubtitles] = useState(false);
-  const [selectedSubLanguage, setSelectedSubLanguage] = useState<string>('');
+  const [selectedSubLanguages, setSelectedSubLanguages] = useState<string[]>([]);
   const [subSearch, setSubSearch] = useState<string>('');
-  const [selectedAudioLanguage, setSelectedAudioLanguage] = useState<string>('');
+  const [selectedAudioLanguages, setSelectedAudioLanguages] = useState<string[]>([]);
 
   // Homelab Switches
   const [bypassProxy, setBypassProxy] = useState(true);
@@ -153,7 +153,7 @@ export const VideoDownloader: React.FC = () => {
           setAvailableQualities(qualitiesToUse);
           setVideoQuality(qualitiesToUse[0]);
         }
-        if (probe.subtitlesAvailable) {
+        if (probe.subtitlesAvailable && downloadType !== 'audio') {
           const tracks = probe.subtitleTracks || [];
           const langs = probe.subtitleLanguages || [];
           
@@ -163,27 +163,23 @@ export const VideoDownloader: React.FC = () => {
                         langs.find(l => l.toLowerCase() === 'en' || l.toLowerCase().startsWith('en-'));
 
           if (hasEnOrig) {
-            setSelectedSubLanguage(typeof hasEnOrig === 'string' ? hasEnOrig : hasEnOrig.code);
+            setSelectedSubLanguages([typeof hasEnOrig === 'string' ? hasEnOrig : hasEnOrig.code]);
           } else if (hasEn) {
-            setSelectedSubLanguage(typeof hasEn === 'string' ? hasEn : hasEn.code);
+            setSelectedSubLanguages([typeof hasEn === 'string' ? hasEn : hasEn.code]);
           } else if (tracks.length > 0) {
-            setSelectedSubLanguage(tracks[0].code);
+            setSelectedSubLanguages([tracks[0].code]);
           } else if (langs.length > 0) {
-            setSelectedSubLanguage(langs[0]);
+            setSelectedSubLanguages([langs[0]]);
           } else {
-            setSelectedSubLanguage('all');
+            setSelectedSubLanguages([]);
           }
           setIncludeSubtitles(true);
         } else {
           setIncludeSubtitles(false);
-          setSelectedSubLanguage('');
+          setSelectedSubLanguages([]);
         }
 
-        if ((probe.audioTracks && probe.audioTracks.length > 1) || (probe.audioLanguages && probe.audioLanguages.length > 1)) {
-          setSelectedAudioLanguage('all');
-        } else {
-          setSelectedAudioLanguage('');
-        }
+        setSelectedAudioLanguages([]);
         showToast('info', `Detected: ${probe.title || 'Video'} (${probe.formattedDuration || 'Duration N/A'})`, 'Video Probed');
       }
     } catch (err) {
@@ -492,15 +488,15 @@ export const VideoDownloader: React.FC = () => {
         downloadType === 'audio' ? audioFormat : 'Mp4',
         undefined,
         downloadType === 'video' ? includeSubtitles : false,
-        downloadType === 'video' && includeSubtitles ? (selectedSubLanguage || undefined) : undefined,
-        selectedAudioLanguage || undefined
+        downloadType === 'video' && includeSubtitles ? (selectedSubLanguages.join(',') || undefined) : undefined,
+        selectedAudioLanguages.join(',') || undefined
       );
 
       setDownloadUrl('');
       setVideoProbe(null);
       setIncludeSubtitles(false);
-      setSelectedSubLanguage('');
-      setSelectedAudioLanguage('');
+      setSelectedSubLanguages([]);
+      setSelectedAudioLanguages([]);
       showToast('success', 'Download job successfully added to pipeline.', 'Download Queued');
       loadDownloadJobs();
       loadBatches();
@@ -539,8 +535,8 @@ export const VideoDownloader: React.FC = () => {
         mediaType: isAudioOnly ? 'Audio' : 'Video',
         format: isAudioOnly ? audioFormat : 'Mp4',
         includeSubtitles: !isAudioOnly ? includeSubtitles : false,
-        subtitleLanguage: !isAudioOnly && includeSubtitles ? (selectedSubLanguage || undefined) : undefined,
-        audioLanguage: selectedAudioLanguage || undefined,
+        subtitleLanguage: !isAudioOnly && includeSubtitles ? (selectedSubLanguages.join(',') || undefined) : undefined,
+        audioLanguage: selectedAudioLanguages.join(',') || undefined,
         expandPlaylists,
         audioOnly: isAudioOnly
       });
@@ -780,7 +776,8 @@ export const VideoDownloader: React.FC = () => {
                     if (!e.target.value) {
                       setVideoProbe(null);
                       setIncludeSubtitles(false);
-                      setSelectedSubLanguage('');
+                      setSelectedSubLanguages([]);
+                      setSelectedAudioLanguages([]);
                     }
                   }}
                   onBlur={handleUrlBlur}
@@ -1024,54 +1021,60 @@ export const VideoDownloader: React.FC = () => {
                   <label className="text-xs font-mono uppercase text-[#85948b] font-semibold">Audio Language Track</label>
                 </div>
                 <span className="text-[10px] font-mono text-[#38bdf8]">
-                  {selectedAudioLanguage === 'all'
-                    ? 'Multi-Track (All Languages)'
-                    : selectedAudioLanguage
-                    ? formatLanguageName(selectedAudioLanguage)
-                    : 'Default Track'}
+                  {selectedAudioLanguages.length === 0
+                    ? 'Default Track'
+                    : `${selectedAudioLanguages.map(l => formatLanguageName(l)).join(' + ')} (${selectedAudioLanguages.length}/2)`}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedAudioLanguage('')}
+                  onClick={() => setSelectedAudioLanguages([])}
                   className={`p-2 rounded-xl text-left border text-xs font-medium transition-all cursor-pointer ${
-                    selectedAudioLanguage === ''
+                    selectedAudioLanguages.length === 0
                       ? 'bg-[#171920] border-[#38bdf8] text-white shadow-[0_0_8px_rgba(56,189,248,0.15)]'
                       : 'bg-[#090a0c] border-[#262a34] text-[#85948b] hover:bg-[#171920]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-white text-[11px]">Default Audio</span>
-                    {selectedAudioLanguage === '' && <Check size={12} className="text-[#38bdf8]" />}
+                    {selectedAudioLanguages.length === 0 && <Check size={12} className="text-[#38bdf8]" />}
                   </div>
                   <span className="text-[10px] text-[#525866] block truncate">Primary / Native</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setSelectedAudioLanguage('all')}
-                  className={`p-2 rounded-xl text-left border text-xs font-medium transition-all cursor-pointer ${
-                    selectedAudioLanguage === 'all'
-                      ? 'bg-[#171920] border-[#3cd69b] text-white shadow-[0_0_8px_rgba(60,214,155,0.15)]'
-                      : 'bg-[#090a0c] border-[#262a34] text-[#85948b] hover:bg-[#171920]'
-                  }`}
+                  disabled
+                  className="p-2 rounded-xl text-left border border-[#262a34] text-xs font-medium bg-[#090a0c] opacity-40 cursor-not-allowed"
+                  title="Disabled: Multi-track download limited to maximum 2 tracks to prevent rate limits"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#3cd69b] text-[11px]">All Languages</span>
-                    {selectedAudioLanguage === 'all' && <Check size={12} className="text-[#3cd69b]" />}
+                    <span className="font-bold text-[#85948b] text-[11px] line-through">All Languages</span>
+                    <span className="text-[9px] text-[#ef4444] font-mono">Disabled</span>
                   </div>
-                  <span className="text-[10px] text-[#525866] block truncate">Multi-stream Mux</span>
+                  <span className="text-[10px] text-[#525866] block truncate">Max 2 Selectable</span>
                 </button>
 
                 {availableAudioTracks.map((trk) => {
-                  const isSelected = selectedAudioLanguage.toLowerCase() === trk.code.toLowerCase();
+                  const isSelected = selectedAudioLanguages.some(l => l.toLowerCase() === trk.code.toLowerCase());
                   return (
                     <button
                       key={trk.code}
                       type="button"
-                      onClick={() => setSelectedAudioLanguage(trk.code)}
+                      onClick={() => {
+                        const lower = trk.code.toLowerCase();
+                        if (selectedAudioLanguages.some(l => l.toLowerCase() === lower)) {
+                          setSelectedAudioLanguages(prev => prev.filter(l => l.toLowerCase() !== lower));
+                        } else {
+                          if (selectedAudioLanguages.length >= 2) {
+                            showToast('info', 'You can select up to 2 audio languages only.', 'Audio Limit');
+                            return;
+                          }
+                          setSelectedAudioLanguages(prev => [...prev, trk.code]);
+                        }
+                      }}
                       className={`p-2 rounded-xl text-left border text-xs font-medium transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-[#171920] border-[#38bdf8] text-white shadow-[0_0_8px_rgba(56,189,248,0.15)]'
@@ -1103,13 +1106,16 @@ export const VideoDownloader: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-1.5 justify-center">
-                <div className="p-3 rounded-xl bg-[#090a0c] border border-[#262a34] flex items-center justify-between">
+                <div className={`p-3 rounded-xl bg-[#090a0c] border border-[#262a34] flex items-center justify-between ${downloadType === 'audio' ? 'opacity-50' : ''}`}>
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-white">Embed Subtitles</span>
-                    <span className="text-[10px] text-[#85948b]">Auto-extract .vtt / .srt</span>
+                    <span className="text-[10px] text-[#85948b]">
+                      {downloadType === 'audio' ? 'Disabled in Audio Mode' : 'Auto-extract .vtt / .srt'}
+                    </span>
                   </div>
                   <Switch
-                    checked={includeSubtitles}
+                    checked={downloadType === 'audio' ? false : includeSubtitles}
+                    disabled={downloadType === 'audio'}
                     onChange={(event) => setIncludeSubtitles(event.currentTarget.checked)}
                     color="cyberMint"
                     size="sm"
@@ -1119,7 +1125,7 @@ export const VideoDownloader: React.FC = () => {
             </div>
 
             {/* Subtitle Language Selection Matrix */}
-            {includeSubtitles && (
+            {downloadType !== 'audio' && includeSubtitles && (
               <div className="flex flex-col gap-2 p-3 rounded-xl bg-[#090a0c] border border-[#262a34] transition-all">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
@@ -1127,11 +1133,9 @@ export const VideoDownloader: React.FC = () => {
                     <span className="text-xs font-mono font-semibold uppercase text-white">Subtitle Language</span>
                   </div>
                   <span className="text-[10px] font-mono text-[#3cd69b]">
-                    {selectedSubLanguage === 'all'
-                      ? 'All Languages'
-                      : selectedSubLanguage
-                      ? formatLanguageName(selectedSubLanguage)
-                      : 'Auto Original'}
+                    {selectedSubLanguages.length === 0
+                      ? 'Auto Original'
+                      : `${selectedSubLanguages.map(l => formatLanguageName(l)).join(' + ')} (${selectedSubLanguages.length}/2)`}
                   </span>
                 </div>
 
@@ -1152,9 +1156,9 @@ export const VideoDownloader: React.FC = () => {
                   {/* Option: Auto Original Subtitles */}
                   <button
                     type="button"
-                    onClick={() => setSelectedSubLanguage('')}
+                    onClick={() => setSelectedSubLanguages([])}
                     className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
-                      selectedSubLanguage === ''
+                      selectedSubLanguages.length === 0
                         ? 'bg-[#171920] border border-[#3cd69b] text-white'
                         : 'bg-[#121418] border border-transparent text-[#85948b] hover:bg-[#1a1c24] hover:text-white'
                     }`}
@@ -1163,33 +1167,41 @@ export const VideoDownloader: React.FC = () => {
                       <span className="font-semibold text-white">Auto Original (Primary Subtitles)</span>
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21242d] text-[#85948b]">auto</span>
                     </div>
-                    {selectedSubLanguage === '' && <Check size={12} className="text-[#3cd69b]" />}
+                    {selectedSubLanguages.length === 0 && <Check size={12} className="text-[#3cd69b]" />}
                   </button>
 
-                  {/* Option: All Available Subtitles */}
+                  {/* Option: All Available Subtitles (Disabled) */}
                   <button
                     type="button"
-                    onClick={() => setSelectedSubLanguage('all')}
-                    className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
-                      selectedSubLanguage === 'all'
-                        ? 'bg-[#171920] border border-[#3cd69b] text-white'
-                        : 'bg-[#121418] border border-transparent text-[#85948b] hover:bg-[#1a1c24] hover:text-white'
-                    }`}
+                    disabled
+                    className="w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between text-xs transition-all bg-[#121418] border border-transparent text-[#525866] opacity-40 cursor-not-allowed"
+                    title="Disabled to prevent YouTube 429 rate limits. Select up to 2 subtitles."
                   >
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white">All Available Subtitles</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21242d] text-[#85948b]">all</span>
+                      <span className="font-semibold text-[#85948b] line-through">All Available Subtitles</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21242d] text-[#ef4444]">disabled</span>
                     </div>
-                    {selectedSubLanguage === 'all' && <Check size={12} className="text-[#3cd69b]" />}
+                    <span className="text-[10px] text-[#525866]">Max 2 Selectable</span>
                   </button>
 
                   {filteredSubtitleList.map((track) => {
-                    const isSelected = selectedSubLanguage.toLowerCase() === track.code.toLowerCase();
+                    const isSelected = selectedSubLanguages.some(l => l.toLowerCase() === track.code.toLowerCase());
                     return (
                       <button
                         key={track.code}
                         type="button"
-                        onClick={() => setSelectedSubLanguage(track.code)}
+                        onClick={() => {
+                          const lower = track.code.toLowerCase();
+                          if (selectedSubLanguages.some(l => l.toLowerCase() === lower)) {
+                            setSelectedSubLanguages(prev => prev.filter(l => l.toLowerCase() !== lower));
+                          } else {
+                            if (selectedSubLanguages.length >= 2) {
+                              showToast('info', 'You can select up to 2 subtitle languages only.', 'Subtitle Limit');
+                              return;
+                            }
+                            setSelectedSubLanguages(prev => [...prev, track.code]);
+                          }
+                        }}
                         className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
                           isSelected
                             ? 'bg-[#171920] border border-[#3cd69b] text-white'

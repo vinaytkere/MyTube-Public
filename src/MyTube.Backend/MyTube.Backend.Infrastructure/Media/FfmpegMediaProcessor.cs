@@ -137,9 +137,11 @@ public class FfmpegMediaProcessor : IMediaProcessor
         }
         else
         {
+            var subtitleCodec = string.Equals(targetExt, "mp4", StringComparison.OrdinalIgnoreCase) ? "mov_text" : "copy";
+
             if (isSameFormat)
             {
-                args.AddRange(new[] { "-c", "copy" });
+                args.AddRange(new[] { "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-c:v", "copy", "-c:a", "copy", "-c:s", subtitleCodec });
             }
             else
             {
@@ -160,17 +162,17 @@ public class FfmpegMediaProcessor : IMediaProcessor
                 if (isVideoMp4Compatible && isAudioAac && string.Equals(targetExt, "mp4", StringComparison.OrdinalIgnoreCase))
                 {
                     isStreamCopy = true;
-                    args.AddRange(new[] { "-c", "copy" });
+                    args.AddRange(new[] { "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text" });
                 }
                 else if (isVideoMp4Compatible && string.Equals(targetExt, "mp4", StringComparison.OrdinalIgnoreCase))
                 {
                     // Video is stream-copied directly (H264/HEVC/VP9/AV1) with zero quality loss; only audio is converted to AAC (takes ~1s)
                     isStreamCopy = true;
-                    args.AddRange(new[] { "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-threads", "0" });
+                    args.AddRange(new[] { "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-c:s", "mov_text", "-threads", "0" });
                 }
                 else
                 {
-                    args.AddRange(new[] { "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-c:a", "aac", "-b:a", "192k", "-threads", "0" });
+                    args.AddRange(new[] { "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-c:a", "aac", "-b:a", "192k", "-c:s", subtitleCodec, "-threads", "0" });
                 }
             }
         }

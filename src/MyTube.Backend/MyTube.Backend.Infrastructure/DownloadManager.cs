@@ -141,6 +141,12 @@ public class DownloadManager : IDownloadManager
             targetFormat = OutputFormat.Mp3;
         }
 
+        // When downloading in audio mode, explicitly disable subtitles
+        if (isAudio)
+        {
+            request.IncludeSubtitles = false;
+        }
+
         var job = new DownloadJobDto
         {
             Id = jobId,
@@ -151,8 +157,8 @@ public class DownloadManager : IDownloadManager
             CreatedAt = DateTime.UtcNow,
             MediaType = targetMediaType,
             Format = targetFormat,
-            IncludeSubtitles = request.IncludeSubtitles,
-            SubtitleLanguage = request.SubtitleLanguage,
+            IncludeSubtitles = !isAudio && request.IncludeSubtitles,
+            SubtitleLanguage = !isAudio && request.IncludeSubtitles ? request.SubtitleLanguage : null,
             AudioLanguage = request.AudioLanguage
         };
 
@@ -1426,8 +1432,8 @@ public class DownloadManager : IDownloadManager
 
         string? harvestedTranscript = null;
 
-        // If subtitles were requested, publish any downloaded subtitle files alongside the video and harvest transcript
-        if (job.IncludeSubtitles)
+        // If subtitles were requested and not audio, publish any downloaded subtitle files alongside the video and harvest transcript
+        if (job.IncludeSubtitles && job.MediaType != OutputMediaType.Audio)
         {
             try
             {
@@ -1867,8 +1873,14 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
             args.Add(sectionArg);
         }
 
+        if (isAudio)
+        {
+            includeSubtitles = false;
+        }
+
         var hasMultiAudio = !string.IsNullOrWhiteSpace(audioLanguage) &&
-                            (audioLanguage.Equals("all", StringComparison.OrdinalIgnoreCase) || audioLanguage.Contains(','));
+                            !audioLanguage.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+                            audioLanguage.Contains(',');
 
         if (hasMultiAudio)
         {
@@ -1877,15 +1889,30 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
 
         if (isAudio)
         {
-            if (hasMultiAudio)
+            if (!string.IsNullOrWhiteSpace(audioLanguage) && !audioLanguage.Equals("all", StringComparison.OrdinalIgnoreCase))
             {
-                args.Add("-f");
-                args.Add("mergeall[vcodec=none]/bestaudio/best");
-            }
-            else if (!string.IsNullOrWhiteSpace(audioLanguage))
-            {
-                args.Add("-f");
-                args.Add($"bestaudio[language={audioLanguage}]/bestaudio[language^={audioLanguage}]/bestaudio/best");
+                if (audioLanguage.Contains(','))
+                {
+                    var langs = audioLanguage.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Take(2)
+                        .ToList();
+                    if (langs.Count > 1)
+                    {
+                        var audioParts = string.Join("+", langs.Select(l => $"bestaudio[language={l}]"));
+                        args.Add("-f");
+                        args.Add($"{audioParts}/bestaudio/best");
+                    }
+                    else if (langs.Count == 1)
+                    {
+                        args.Add("-f");
+                        args.Add($"bestaudio[language={langs[0]}]/bestaudio[language^={langs[0]}]/bestaudio/best");
+                    }
+                }
+                else
+                {
+                    args.Add("-f");
+                    args.Add($"bestaudio[language={audioLanguage}]/bestaudio[language^={audioLanguage}]/bestaudio/best");
+                }
             }
             else
             {
@@ -1938,7 +1965,6 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
 
     public static string NormalizeSubtitleLanguage(string? lang, VideoProbeResultDto? probe = null)
     {
-        const string SafeAllSubs = "all,-live_chat,-.*-.*,.*-orig,en-US,en-GB,es-419,pt-BR,pt-PT,zh-Hans,zh-Hant";
         const string SafeAutoSubs = ".*-orig,en-orig,en,en-US,en-GB,es-orig,es,es-419,fr-orig,fr,de-orig,de,hi-orig,hi,ja-orig,ja,zh-Hans,zh-Hant";
 
         if (string.IsNullOrWhiteSpace(lang) || lang.Equals("auto", StringComparison.OrdinalIgnoreCase))
@@ -1964,24 +1990,42 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
 
         var trimmed = lang.Trim();
 
-        if (trimmed.Contains("all", StringComparison.OrdinalIgnoreCase))
+        // "all" available subtitles disabled to prevent YouTube 429 rate limits; fallback to at most 2 safe tracks
+        if (trimmed.Equals("all", StringComparison.OrdinalIgnoreCase))
         {
             if (probe?.SubtitleTracks != null && probe.SubtitleTracks.Count > 0)
             {
-                var knownCodes = probe.SubtitleTracks
-                    .Select(t => t.Code)
-                    .Where(c => !string.IsNullOrWhiteSpace(c) && !c.Contains("-to-", StringComparison.OrdinalIgnoreCase))
+                var topTwo = probe.SubtitleTracks
+                    .Where(t => !string.IsNullOrWhiteSpace(t.Code) && !t.Code.Contains("-to-", StringComparison.OrdinalIgnoreCase))
+                    .Take(2)
+                    .Select(t => NormalizeSingleSubtitleLang(t.Code))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
-                if (knownCodes.Count > 0)
+                if (topTwo.Count > 0)
                 {
-                    return string.Join(",", knownCodes);
+                    return string.Join(",", topTwo);
                 }
             }
 
-            return SafeAllSubs;
+            return "en-orig,en";
         }
 
+        // Support up to 2 comma-separated subtitle languages
+        if (trimmed.Contains(','))
+        {
+            var parts = trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Take(2)
+                .Select(NormalizeSingleSubtitleLang)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            return string.Join(",", parts);
+        }
+
+        return NormalizeSingleSubtitleLang(trimmed);
+    }
+
+    private static string NormalizeSingleSubtitleLang(string trimmed)
+    {
         if (trimmed.Equals("en.*,en", StringComparison.OrdinalIgnoreCase) ||
             trimmed.Equals("en.*", StringComparison.OrdinalIgnoreCase) ||
             trimmed.Equals("en", StringComparison.OrdinalIgnoreCase))
@@ -2016,7 +2060,8 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
     {
         var isMp4 = targetFormat == null || targetFormat == OutputFormat.Mp4;
         var hasMultiAudio = !string.IsNullOrWhiteSpace(audioLanguage) &&
-                            (audioLanguage.Equals("all", StringComparison.OrdinalIgnoreCase) || audioLanguage.Contains(','));
+                            !audioLanguage.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+                            audioLanguage.Contains(',');
 
         if (!string.IsNullOrWhiteSpace(audioLanguage))
         {
@@ -2034,16 +2079,26 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
                 videoPart = (isMp4 && !hasMultiAudio) ? "bestvideo[ext=mp4]" : "bestvideo";
             }
 
+            // "all" disabled: fallback to default best audio
             if (audioLanguage.Equals("all", StringComparison.OrdinalIgnoreCase))
             {
-                return $"{videoPart}+mergeall[vcodec=none]/{videoPart}+bestaudio/best";
+                return $"{videoPart}+bestaudio/best";
             }
 
             if (audioLanguage.Contains(','))
             {
-                var langs = audioLanguage.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                var audioParts = string.Join("+", langs.Select(l => $"bestaudio[language={l}]"));
-                return $"{videoPart}+{audioParts}/{videoPart}+bestaudio/best";
+                var langs = audioLanguage.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Take(2)
+                    .ToList();
+                if (langs.Count > 1)
+                {
+                    var audioParts = string.Join("+", langs.Select(l => $"bestaudio[language={l}]"));
+                    return $"{videoPart}+{audioParts}/{videoPart}+bestaudio/best";
+                }
+                else if (langs.Count == 1)
+                {
+                    return $"{videoPart}+bestaudio[language={langs[0]}]/{videoPart}+bestaudio[language^={langs[0]}]/{videoPart}+bestaudio/best";
+                }
             }
 
             return $"{videoPart}+bestaudio[language={audioLanguage}]/{videoPart}+bestaudio[language^={audioLanguage}]/{videoPart}+bestaudio/best";
