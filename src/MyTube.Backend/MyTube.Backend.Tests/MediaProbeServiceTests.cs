@@ -208,7 +208,8 @@ public class MediaProbeServiceTests : IDisposable
         Assert.True(result.SubtitlesAvailable);
         Assert.Contains("en", result.SubtitleLanguages);
         Assert.Contains("es", result.SubtitleLanguages);
-        Assert.Contains("fr", result.SubtitleLanguages);
+        // fr was an auto-caption while creator subtitles exist, so it is excluded to avoid 429
+        Assert.DoesNotContain("fr", result.SubtitleLanguages);
     }
 
     [Fact]
@@ -273,7 +274,8 @@ public class MediaProbeServiceTests : IDisposable
         Assert.True(result.SubtitlesAvailable);
         Assert.Contains("en", result.SubtitleLanguages);
         Assert.Contains("es", result.SubtitleLanguages);
-        Assert.Contains("fr", result.SubtitleLanguages);
+        // fr was an auto-caption while creator subtitles exist, so it is excluded to avoid 429
+        Assert.DoesNotContain("fr", result.SubtitleLanguages);
     }
 
     [Fact]
@@ -311,13 +313,48 @@ public class MediaProbeServiceTests : IDisposable
 
         Assert.True(result.SubtitlesAvailable);
         Assert.Contains("en", result.SubtitleLanguages);
-        Assert.Contains("en-US", result.SubtitleLanguages);
-        // en-orig and translation pairs should be filtered out
+        // When creator subtitles exist, auto-captions and translation pairs should be filtered out to prevent 429 errors
+        Assert.DoesNotContain("en-US", result.SubtitleLanguages);
         Assert.DoesNotContain("en-orig", result.SubtitleLanguages);
         Assert.DoesNotContain("en-es", result.SubtitleLanguages);
         Assert.DoesNotContain("en-fr", result.SubtitleLanguages);
         Assert.DoesNotContain("en-de", result.SubtitleLanguages);
         Assert.DoesNotContain("ne-es", result.SubtitleLanguages);
+    }
+
+    [Fact]
+    public async Task ProbeUrlAsync_NoCreatorSubtitles_FallbacksToOriginalSpokenCaptionOnly()
+    {
+        var fakeRunner = new FakeToolRunner();
+        fakeRunner.Handler = (tool, args) =>
+        {
+            Assert.Equal("yt-dlp", tool);
+            var json = """
+            {
+                "title": "YouTube Video Without Creator Subtitles",
+                "duration": 300,
+                "subtitles": {},
+                "automatic_captions": {
+                    "en-orig": [{ "ext": "vtt" }],
+                    "kn": [{ "ext": "vtt" }],
+                    "es": [{ "ext": "vtt" }]
+                },
+                "formats": [
+                    { "height": 1080 }
+                ]
+            }
+            """;
+            return new ToolExecutionResult(0, json, "");
+        };
+
+        var service = new MediaProbeService(fakeRunner, NullLogger<MediaProbeService>.Instance);
+        var result = await service.ProbeUrlAsync("https://www.youtube.com/watch?v=dummy123");
+
+        Assert.True(result.SubtitlesAvailable);
+        Assert.Contains("en", result.SubtitleLanguages);
+        // Auto-translated tracks like Kannada and Spanish should be strictly excluded
+        Assert.DoesNotContain("kn", result.SubtitleLanguages);
+        Assert.DoesNotContain("es", result.SubtitleLanguages);
     }
 
     [Fact]

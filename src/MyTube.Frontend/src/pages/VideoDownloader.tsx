@@ -212,15 +212,18 @@ export const VideoDownloader: React.FC = () => {
 
   // Dynamic list of subtitle tracks derived from probe or popular defaults
   const availableSubtitleTracks = useMemo<MediaTrackInfo[]>(() => {
-    if (videoProbe?.subtitleTracks && videoProbe.subtitleTracks.length > 0) {
-      return videoProbe.subtitleTracks;
-    }
-    if (videoProbe?.subtitleLanguages && videoProbe.subtitleLanguages.length > 0) {
-      return videoProbe.subtitleLanguages.map(code => ({
-        code,
-        name: formatLanguageName(code),
-        isOriginal: code.toLowerCase().endsWith('-orig')
-      }));
+    if (videoProbe) {
+      if (videoProbe.subtitleTracks && videoProbe.subtitleTracks.length > 0) {
+        return videoProbe.subtitleTracks;
+      }
+      if (videoProbe.subtitleLanguages && videoProbe.subtitleLanguages.length > 0) {
+        return videoProbe.subtitleLanguages.map(code => ({
+          code,
+          name: formatLanguageName(code),
+          isOriginal: code.toLowerCase().endsWith('-orig')
+        }));
+      }
+      return [];
     }
     return POPULAR_SUBTITLE_LANGUAGES;
   }, [videoProbe]);
@@ -901,7 +904,9 @@ export const VideoDownloader: React.FC = () => {
                   <div className="flex flex-col">
                     <span className="text-[10px] text-[#85948b] uppercase">Subtitles</span>
                     <span className="text-white font-bold">
-                      {videoProbe.subtitleLanguages?.length ? `${videoProbe.subtitleLanguages.length} Tracks` : 'Auto Extract'}
+                      {videoProbe.subtitleTracks?.length
+                        ? `${videoProbe.subtitleTracks.length} Creator Tracks`
+                        : (videoProbe.subtitleLanguages?.length ? `${videoProbe.subtitleLanguages.length} Tracks` : 'None')}
                     </span>
                   </div>
                   <div className="flex flex-col">
@@ -1228,7 +1233,7 @@ export const VideoDownloader: React.FC = () => {
 
                   {filteredSubtitleList.length === 0 && (
                     <div className="py-3 text-center text-xs text-[#525866]">
-                      No languages found matching "{subSearch}"
+                      {videoProbe ? 'No creator-uploaded subtitles available for this video' : `No languages found matching "${subSearch}"`}
                     </div>
                   )}
                 </div>
