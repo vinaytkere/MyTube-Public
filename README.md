@@ -1,7 +1,7 @@
 # MyTube Public Edition
 
 [![Build and Test](https://github.com/vinaytkere/MyTube-Public/actions/workflows/ci.yml/badge.svg)](https://github.com/vinaytkere/MyTube-Public/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
 [![React 19](https://img.shields.io/badge/React-19-cyan.svg)](https://react.dev/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-blue.svg)](https://www.sqlite.org/)
@@ -244,4 +244,4 @@ Please review our [Security Policy](SECURITY.md) for information regarding vulne
 
 ## License
 
-This project is open-source under the [MIT License](LICENSE).
+This project is open-source under the [Apache License 2.0](LICENSE).
