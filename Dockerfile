@@ -54,9 +54,11 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 
-# Create non-root application user and persistent data directories
-RUN groupadd -g 1000 mytube && \
-    useradd -u 1000 -g mytube -m -s /bin/bash mytube && \
+# Remove default UID/GID 1000 user if present (Ubuntu 24.04 Noble compatibility), then create mytube user
+RUN if id -u 1000 >/dev/null 2>&1; then userdel -f "$(id -un 1000)" 2>/dev/null || true; fi && \
+    if getent group 1000 >/dev/null 2>&1; then groupdel "$(getent group 1000 | cut -d: -f1)" 2>/dev/null || true; fi && \
+    groupadd -g 1000 -o mytube && \
+    useradd -u 1000 -g mytube -o -m -s /bin/bash mytube && \
     mkdir -p /app/data /app/data/keys /app/media /app/cache /run/secrets && \
     chown -R mytube:mytube /app
 
@@ -91,7 +93,7 @@ COPY --from=frontend-build /frontend/dist /app/publish/wwwroot
 FROM runtime-base AS final
 WORKDIR /app
 
-COPY --from=build /app/publish .
+COPY --from=build --chown=mytube:mytube /app/publish .
 
 # Run as non-root user
 USER mytube
