@@ -182,8 +182,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
           </span>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#121418] border border-[#21242d] text-cyan-400 text-[11px]">
+        <div className="flex items-center gap-2">
+          {video.audioTracks && video.audioTracks.length > 1 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#121418] border border-[#3cd69b]/60 text-white shadow-lg">
+              <Volume2 size={13} className="text-[#3cd69b] shrink-0" />
+              <span className="text-[10px] font-mono uppercase text-[#3cd69b] font-bold">Audio:</span>
+              <select
+                value={selectedAudioTrack}
+                onChange={(e) => {
+                  const trackIdx = parseInt(e.target.value, 10);
+                  setSelectedAudioTrack(trackIdx);
+                  if (playerRef.current) {
+                    const curr = playerRef.current.currentTime;
+                    setTranscodeStart(isNative ? curr : (transcodeStart + curr));
+                  }
+                }}
+                className="bg-transparent border-none outline-none text-xs font-semibold text-white cursor-pointer pr-1 focus:ring-0"
+              >
+                {video.audioTracks.map((track) => (
+                  <option key={track.index} value={track.index} className="bg-[#121418] text-white">
+                    {track.title || track.language.toUpperCase() || `Track ${track.index + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#121418] border border-[#21242d] text-cyan-400 text-[11px]">
             <Sparkles size={12} />
             <span>Whisper Live Subtitles</span>
           </div>

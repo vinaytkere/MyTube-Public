@@ -68,7 +68,7 @@ public class FormatSelectorTests
     public void BuildFormatSelector_WithMultipleCommaSeparatedAudioLanguages_GeneratesMultiAudioSelector()
     {
         var result = DownloadManager.BuildFormatSelector("1080p", OutputFormat.Mp4, "en,es");
-        const string expected = "bestvideo[height<=1080]+bestaudio[language=en]+bestaudio[language=es]/bestvideo[height<=1080]+bestaudio/best";
+        const string expected = "bestvideo[height<=1080]+(bestaudio[language=en]/bestaudio[language^=en])+(bestaudio[language=es]/bestaudio[language^=es])/bestvideo[height<=1080]+bestaudio/best";
         Assert.Equal(expected, result);
     }
 
@@ -76,7 +76,7 @@ public class FormatSelectorTests
     public void BuildFormatSelector_WithThreeCommaSeparatedAudioLanguages_LimitsToMaxTwo()
     {
         var result = DownloadManager.BuildFormatSelector("1080p", OutputFormat.Mp4, "en,es,hi");
-        const string expected = "bestvideo[height<=1080]+bestaudio[language=en]+bestaudio[language=es]/bestvideo[height<=1080]+bestaudio/best";
+        const string expected = "bestvideo[height<=1080]+(bestaudio[language=en]/bestaudio[language^=en])+(bestaudio[language=es]/bestaudio[language^=es])/bestvideo[height<=1080]+bestaudio/best";
         Assert.Equal(expected, result);
     }
 

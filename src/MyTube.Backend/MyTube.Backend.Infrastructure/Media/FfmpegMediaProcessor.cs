@@ -391,6 +391,31 @@ public class FfmpegMediaProcessor : IMediaProcessor
                 }
             }
 
+            var audioStreams = probeResult.Streams?.Where(s => string.Equals(s.Codec_Type, "audio", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (audioStreams != null && audioStreams.Count > 0)
+            {
+                metadata.AudioCodec = audioStreams[0].Codec_Name ?? string.Empty;
+                var audioTracks = new List<AudioTrackInfo>();
+                for (int i = 0; i < audioStreams.Count; i++)
+                {
+                    var s = audioStreams[i];
+                    var lang = s.Tags != null && s.Tags.TryGetValue("language", out var l) ? l : "";
+                    var titleTag = s.Tags != null && s.Tags.TryGetValue("title", out var t) ? t : (s.Tags != null && s.Tags.TryGetValue("handler_name", out var h) ? h : "");
+                    var displayTitle = !string.IsNullOrWhiteSpace(titleTag)
+                        ? titleTag
+                        : (!string.IsNullOrWhiteSpace(lang) ? lang.ToUpperInvariant() : $"Audio {i + 1}");
+
+                    audioTracks.Add(new AudioTrackInfo
+                    {
+                        Index = i,
+                        Language = lang,
+                        Title = displayTitle,
+                        Codec = s.Codec_Name ?? string.Empty
+                    });
+                }
+                metadata.AudioTracks = audioTracks;
+            }
+
             if (probeResult.Format?.Tags != null &&
                 probeResult.Format.Tags.TryGetValue("title", out var title) &&
                 !string.IsNullOrWhiteSpace(title))

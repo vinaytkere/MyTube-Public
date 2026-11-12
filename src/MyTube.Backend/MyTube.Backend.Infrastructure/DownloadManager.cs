@@ -1936,6 +1936,10 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
             args.Add(formatSelector);
             args.Add("--merge-output-format");
             args.Add("mkv/mp4");
+            if (!string.IsNullOrWhiteSpace(audioLanguage) && audioLanguage.Contains(','))
+            {
+                args.Add("--audio-multistreams");
+            }
             args.Add("--write-thumbnail");
 
             if (includeSubtitles)
@@ -2101,7 +2105,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
                     .ToList();
                 if (langs.Count > 1)
                 {
-                    var audioParts = string.Join("+", langs.Select(l => $"bestaudio[language={l}]"));
+                    var audioParts = string.Join("+", langs.Select(l => $"(bestaudio[language={l}]/bestaudio[language^={l}])"));
                     return $"{videoPart}+{audioParts}/{videoPart}+bestaudio/best";
                 }
                 else if (langs.Count == 1)
