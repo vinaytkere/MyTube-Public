@@ -700,7 +700,7 @@ public class VideoService : IVideoService
 
             if (normalizedDir == normalizedMediaRoot || normalizedDir == normalizedDownloads) return;
 
-            var supportedExtensions = new[] { ".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".3gp", ".mp3", ".m4a" };
+            var supportedExtensions = new[] { ".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".3gp", ".mp3", ".m4a", ".opus", ".wav", ".ogg", ".flac", ".aac" };
             var hasMediaFiles = Directory.EnumerateFiles(normalizedDir, "*.*", SearchOption.AllDirectories)
                 .Any(f => supportedExtensions.Contains(Path.GetExtension(f).ToLower()));
 

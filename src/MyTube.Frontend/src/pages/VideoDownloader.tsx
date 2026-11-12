@@ -1149,6 +1149,23 @@ export const VideoDownloader: React.FC = () => {
 
                 {/* Subtitle Options List */}
                 <div className="max-h-44 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                  {/* Option: Auto Original Subtitles */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSubLanguage('')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
+                      selectedSubLanguage === ''
+                        ? 'bg-[#171920] border border-[#3cd69b] text-white'
+                        : 'bg-[#121418] border border-transparent text-[#85948b] hover:bg-[#1a1c24] hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-white">Auto Original (Primary Subtitles)</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21242d] text-[#85948b]">auto</span>
+                    </div>
+                    {selectedSubLanguage === '' && <Check size={12} className="text-[#3cd69b]" />}
+                  </button>
+
                   {/* Option: All Available Subtitles */}
                   <button
                     type="button"

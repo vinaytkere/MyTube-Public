@@ -20,7 +20,7 @@ public class VideoScanner : IVideoScanner
     private readonly ILogger<VideoScanner> _logger;
     private readonly string _mediaRoot;
     private readonly string _cacheRoot;
-    private readonly string[] _supportedExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".3gp", ".mp3", ".m4a"];
+    private readonly string[] _supportedExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".3gp", ".mp3", ".m4a", ".opus", ".wav", ".ogg", ".flac", ".aac"];
 
     private int _isScanning; // 0 = false, 1 = true
     private string _statusMessage = "Idle";

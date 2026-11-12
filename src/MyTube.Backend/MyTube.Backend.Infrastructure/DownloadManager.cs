@@ -136,6 +136,10 @@ public class DownloadManager : IDownloadManager
         var isAudio = request.MediaType == OutputMediaType.Audio || IsAudioQuality(request.Quality);
         var targetMediaType = isAudio ? OutputMediaType.Audio : OutputMediaType.Video;
         var targetFormat = request.Format ?? (isAudio ? OutputFormat.Mp3 : OutputFormat.Mp4);
+        if (isAudio && targetFormat == OutputFormat.Mp4)
+        {
+            targetFormat = OutputFormat.Mp3;
+        }
 
         var job = new DownloadJobDto
         {
@@ -1001,35 +1005,86 @@ public class DownloadManager : IDownloadManager
             job.Progress = 15;
 
             var sourceTemplate = Path.Combine(stagingSourceDir, $"source_{jobId:N}.%(ext)s");
-            var dlArgs = BuildYtDlpArguments(request.Url, sourceTemplate, request.Quality, null, isAudio, request.IncludeSubtitles, request.SubtitleLanguage, includeProxy: true, targetFormat: job.Format, audioLanguage: request.AudioLanguage);
-            _logger.LogInformation("Job {JobId}: [BREAKPOINT:4_YtDlpDownloadStart] Executing yt-dlp with {ArgCount} arguments. Quality: {Quality}",
-                jobId, dlArgs.Count, request.Quality);
+            var dlArgs = BuildYtDlpArguments(
+                request.Url, 
+                sourceTemplate, 
+                request.Quality, 
+                null, 
+                isAudio, 
+                request.IncludeSubtitles, 
+                request.SubtitleLanguage, 
+                includeProxy: true, 
+                targetFormat: job.Format, 
+                audioLanguage: request.AudioLanguage,
+                useAria2c: true,
+                probe: probe,
+                writeAutoSubs: true);
+
+            _logger.LogInformation("Job {JobId}: [BREAKPOINT:4_YtDlpDownloadStart] Executing yt-dlp with {ArgCount} arguments. Quality: {Quality}, IsAudio: {IsAudio}, Format: {Format}, AudioLang: {AudioLang}, IncludeSubtitles: {IncludeSubtitles}, SubtitleLang: {SubtitleLang}",
+                jobId, dlArgs.Count, request.Quality, isAudio, job.Format, request.AudioLanguage ?? "(default)", request.IncludeSubtitles, request.SubtitleLanguage ?? "(auto)");
             var dlRun = await RunYtDlpDownloadAsync(jobId, job, dlArgs, 0.55, 15.0, cancellationToken);
 
             var settings = _settingsStore?.GetSettings();
             var hasProxy = !string.IsNullOrWhiteSpace(settings?.Proxy) || !string.IsNullOrWhiteSpace(_configuration?["Media:Proxy"]);
 
-            // If download failed and a proxy was active, retry without proxy
+            // 1. If download failed with aria2c network/socket error or exit code 1, retry with yt-dlp native downloader
+            if (dlRun.ExitCode != 0 && IsAria2cFailure(dlRun.StandardError, dlRun.StandardOutput, job.ErrorMessage))
+            {
+                _logger.LogWarning("Job {JobId}: aria2c download failed ({Err}). Retrying with native yt-dlp downloader...", jobId, job.ErrorMessage);
+                job.Phase = isAudio ? "Retrying audio download with native downloader..." : "Retrying video download with native downloader...";
+                job.ErrorMessage = null;
+                var nativeDlArgs = BuildYtDlpArguments(
+                    request.Url, sourceTemplate, request.Quality, null, isAudio,
+                    request.IncludeSubtitles, request.SubtitleLanguage, includeProxy: !hasProxy,
+                    targetFormat: job.Format, audioLanguage: request.AudioLanguage,
+                    useAria2c: false, probe: probe, writeAutoSubs: true);
+                dlRun = await RunYtDlpDownloadAsync(jobId, job, nativeDlArgs, 0.55, 15.0, cancellationToken);
+            }
+
+            // 2. If download failed and a proxy was active, retry without proxy
             if (dlRun.ExitCode != 0 && hasProxy)
             {
                 _logger.LogWarning("Job {JobId}: Download failed with proxy ({Err}). Retrying directly without proxy...", jobId, job.ErrorMessage);
                 job.Phase = isAudio ? "Retrying audio download without proxy..." : "Retrying video download without proxy...";
                 job.ErrorMessage = null;
-                var directDlArgs = BuildYtDlpArguments(request.Url, sourceTemplate, request.Quality, null, isAudio, request.IncludeSubtitles, request.SubtitleLanguage, includeProxy: false, targetFormat: job.Format, audioLanguage: request.AudioLanguage);
+                var directDlArgs = BuildYtDlpArguments(
+                    request.Url, sourceTemplate, request.Quality, null, isAudio,
+                    request.IncludeSubtitles, request.SubtitleLanguage, includeProxy: false,
+                    targetFormat: job.Format, audioLanguage: request.AudioLanguage,
+                    useAria2c: true, probe: probe, writeAutoSubs: true);
                 dlRun = await RunYtDlpDownloadAsync(jobId, job, directDlArgs, 0.55, 15.0, cancellationToken);
             }
 
-            // If download failed with subtitle rate limit (429) or subtitle error, retry media download without subtitles
-            if (dlRun.ExitCode != 0 && request.IncludeSubtitles && (job.ErrorMessage?.Contains("subtitle", StringComparison.OrdinalIgnoreCase) == true || job.ErrorMessage?.Contains("429", StringComparison.OrdinalIgnoreCase) == true))
+            // 3. If download failed with subtitle rate limit (429) or subtitle error:
+            // Tier A: retry with creator subtitles only (disabling auto-subs which trigger 429)
+            if (dlRun.ExitCode != 0 && request.IncludeSubtitles && IsSubtitleOr429Failure(dlRun.StandardError, dlRun.StandardOutput, job.ErrorMessage))
             {
-                _logger.LogWarning("Job {JobId}: Subtitle download was rate-limited or failed ({Err}). Retrying media download without subtitles...", jobId, job.ErrorMessage);
-                job.Phase = isAudio ? "Retrying audio download without subtitles..." : "Retrying video download without subtitles...";
+                _logger.LogWarning("Job {JobId}: Subtitle download was rate-limited or failed ({Err}). Retrying media download with creator subtitles only...", jobId, job.ErrorMessage);
+                job.Phase = isAudio ? "Retrying audio download with creator subtitles..." : "Retrying video download with creator subtitles...";
                 job.ErrorMessage = null;
-                var noSubDlArgs = BuildYtDlpArguments(request.Url, sourceTemplate, request.Quality, null, isAudio, includeSubtitles: false, null, includeProxy: !hasProxy, targetFormat: job.Format, audioLanguage: request.AudioLanguage);
-                dlRun = await RunYtDlpDownloadAsync(jobId, job, noSubDlArgs, 0.55, 15.0, cancellationToken);
+                var creatorSubDlArgs = BuildYtDlpArguments(
+                    request.Url, sourceTemplate, request.Quality, null, isAudio,
+                    includeSubtitles: true, request.SubtitleLanguage, includeProxy: !hasProxy,
+                    targetFormat: job.Format, audioLanguage: request.AudioLanguage,
+                    useAria2c: true, probe: probe, writeAutoSubs: false);
+                dlRun = await RunYtDlpDownloadAsync(jobId, job, creatorSubDlArgs, 0.55, 15.0, cancellationToken);
+
+                // Tier B: if still failing on subtitles, download media without subtitles
+                if (dlRun.ExitCode != 0 && IsSubtitleOr429Failure(dlRun.StandardError, dlRun.StandardOutput, job.ErrorMessage))
+                {
+                    _logger.LogWarning("Job {JobId}: Subtitle download still failed ({Err}). Retrying media download without subtitles...", jobId, job.ErrorMessage);
+                    job.Phase = isAudio ? "Retrying audio download without subtitles..." : "Retrying video download without subtitles...";
+                    job.ErrorMessage = null;
+                    var noSubDlArgs = BuildYtDlpArguments(
+                        request.Url, sourceTemplate, request.Quality, null, isAudio,
+                        includeSubtitles: false, null, includeProxy: !hasProxy,
+                        targetFormat: job.Format, audioLanguage: request.AudioLanguage,
+                        useAria2c: true, probe: probe, writeAutoSubs: false);
+                    dlRun = await RunYtDlpDownloadAsync(jobId, job, noSubDlArgs, 0.55, 15.0, cancellationToken);
+                }
             }
 
-            // If download failed with HTTP 403 Forbidden or bot detection, retry with alternate player client and clean cache
+            // 4. If download failed with HTTP 403 Forbidden or bot detection, retry with alternate player client and clean cache
             if (dlRun.ExitCode != 0 && IsForbiddenOrBotBlocked(dlRun.StandardError, job.ErrorMessage))
             {
                 _logger.LogWarning("Job {JobId}: Download failed with HTTP 403 Forbidden / bot check ({Err}). Retrying with fallback player client (mweb,tv,web) and clean cache...", jobId, job.ErrorMessage);
@@ -1048,7 +1103,9 @@ public class DownloadManager : IDownloadManager
                     overrideExtractorArgs: "youtube:player_client=mweb,tv,web",
                     includeUserAgent: false,
                     clearCache: true,
-                    audioLanguage: request.AudioLanguage);
+                    audioLanguage: request.AudioLanguage,
+                    useAria2c: true,
+                    probe: probe);
                 dlRun = await RunYtDlpDownloadAsync(jobId, job, fallback403Args, 0.55, 15.0, cancellationToken);
 
                 // Second tier fallback: try android client with native headers
@@ -1070,14 +1127,16 @@ public class DownloadManager : IDownloadManager
                         overrideExtractorArgs: "youtube:player_client=android",
                         includeUserAgent: false,
                         clearCache: false,
-                        audioLanguage: request.AudioLanguage);
+                        audioLanguage: request.AudioLanguage,
+                        useAria2c: true,
+                        probe: probe);
                     dlRun = await RunYtDlpDownloadAsync(jobId, job, androidArgs, 0.55, 15.0, cancellationToken);
                 }
             }
 
             if (dlRun.ExitCode != 0)
             {
-                var cleanDlError = ExtractMeaningfulYtDlpError(dlRun.StandardError);
+                var cleanDlError = ExtractMeaningfulYtDlpError(dlRun.StandardError, dlRun.StandardOutput);
                 throw new MediaProcessingException(
                     $"Source download failed with exit code {dlRun.ExitCode}: {cleanDlError}",
                     "YTDLP_DOWNLOAD_FAILED",
@@ -1756,7 +1815,10 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
         string? overrideExtractorArgs = null,
         bool includeUserAgent = true,
         bool clearCache = false,
-        string? audioLanguage = null)
+        string? audioLanguage = null,
+        bool useAria2c = true,
+        VideoProbeResultDto? probe = null,
+        bool writeAutoSubs = true)
     {
         var args = new List<string>
         {
@@ -1769,14 +1831,24 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
             "--force-overwrites",
             "--buffer-size", "1024K",
             "--retries", "10",
-            "--fragment-retries", "10",
-            "--downloader", "aria2c",
-            "--downloader-args", "aria2c:-x 16 -s 16 -k 1M --file-allocation=none",
+            "--fragment-retries", "10"
+        };
+
+        if (useAria2c)
+        {
+            args.Add("--downloader");
+            args.Add("aria2c");
+            args.Add("--downloader-args");
+            args.Add("aria2c:-x 16 -s 16 -k 1M --file-allocation=none --disable-ipv6=true");
+        }
+
+        args.AddRange(new[]
+        {
             "--ffmpeg-location", _toolRunner.GetFfmpegPath(),
             "--postprocessor-args", "ffmpeg:-nostdin -threads 0",
             "--js-runtimes", "node",
             "--compat-options", "no-live-chat"
-        };
+        });
 
         if (clearCache)
         {
@@ -1813,7 +1885,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
             else if (!string.IsNullOrWhiteSpace(audioLanguage))
             {
                 args.Add("-f");
-                args.Add($"bestaudio[language={audioLanguage}]/bestaudio/best");
+                args.Add($"bestaudio[language={audioLanguage}]/bestaudio[language^={audioLanguage}]/bestaudio/best");
             }
             else
             {
@@ -1833,9 +1905,14 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
             if (includeSubtitles)
             {
                 args.Add("--write-subs");
-                args.Add("--write-auto-subs");
+                if (writeAutoSubs)
+                {
+                    args.Add("--write-auto-subs");
+                }
                 args.Add("--sub-langs");
-                args.Add(NormalizeSubtitleLanguage(subtitleLanguage));
+                args.Add(NormalizeSubtitleLanguage(subtitleLanguage, probe));
+                args.Add("--sub-format");
+                args.Add("vtt/best");
                 args.Add("--embed-subs");
                 args.Add("--convert-subs");
                 args.Add("vtt");
@@ -1859,25 +1936,57 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
         return args;
     }
 
-    private static string NormalizeSubtitleLanguage(string? lang)
+    public static string NormalizeSubtitleLanguage(string? lang, VideoProbeResultDto? probe = null)
     {
-        if (string.IsNullOrWhiteSpace(lang))
+        const string SafeAllSubs = "all,-live_chat,-.*-.*,.*-orig,en-US,en-GB,es-419,pt-BR,pt-PT,zh-Hans,zh-Hant";
+        const string SafeAutoSubs = ".*-orig,en-orig,en,en-US,en-GB,es-orig,es,es-419,fr-orig,fr,de-orig,de,hi-orig,hi,ja-orig,ja,zh-Hans,zh-Hant";
+
+        if (string.IsNullOrWhiteSpace(lang) || lang.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
-            return "en-orig,en,en-US,en-GB";
+            if (probe?.SubtitleTracks != null && probe.SubtitleTracks.Count > 0)
+            {
+                var origTrack = probe.SubtitleTracks.FirstOrDefault(t => t.IsOriginal || t.Code.EndsWith("-orig", StringComparison.OrdinalIgnoreCase));
+                if (origTrack != null && !string.IsNullOrWhiteSpace(origTrack.Code))
+                {
+                    var cleanCode = origTrack.Code.Replace("-orig", "");
+                    return $"{cleanCode}-orig,{cleanCode}";
+                }
+                var firstTrack = probe.SubtitleTracks.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.Code));
+                if (firstTrack != null)
+                {
+                    var cleanCode = firstTrack.Code.Replace("-orig", "");
+                    return $"{cleanCode}-orig,{cleanCode}";
+                }
+            }
+
+            return SafeAutoSubs;
         }
 
         var trimmed = lang.Trim();
+
+        if (trimmed.Contains("all", StringComparison.OrdinalIgnoreCase))
+        {
+            if (probe?.SubtitleTracks != null && probe.SubtitleTracks.Count > 0)
+            {
+                var knownCodes = probe.SubtitleTracks
+                    .Select(t => t.Code)
+                    .Where(c => !string.IsNullOrWhiteSpace(c) && !c.Contains("-to-", StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (knownCodes.Count > 0)
+                {
+                    return string.Join(",", knownCodes);
+                }
+            }
+
+            return SafeAllSubs;
+        }
 
         if (trimmed.Equals("en.*,en", StringComparison.OrdinalIgnoreCase) ||
             trimmed.Equals("en.*", StringComparison.OrdinalIgnoreCase) ||
             trimmed.Equals("en", StringComparison.OrdinalIgnoreCase))
         {
             return "en-orig,en,en-US,en-GB";
-        }
-
-        if (trimmed.Contains("all", StringComparison.OrdinalIgnoreCase))
-        {
-            return "all,-live_chat";
         }
 
         if (trimmed.EndsWith("-orig", StringComparison.OrdinalIgnoreCase))
@@ -1888,6 +1997,16 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
         if (trimmed.Equals("es", StringComparison.OrdinalIgnoreCase))
         {
             return "es-orig,es,es-419,es-ES";
+        }
+
+        if (trimmed.Equals("pt", StringComparison.OrdinalIgnoreCase))
+        {
+            return "pt-orig,pt,pt-BR,pt-PT";
+        }
+
+        if (trimmed.Equals("zh", StringComparison.OrdinalIgnoreCase))
+        {
+            return "zh-orig,zh,zh-Hans,zh-Hant";
         }
 
         return $"{trimmed}-orig,{trimmed}";
@@ -1927,7 +2046,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
                 return $"{videoPart}+{audioParts}/{videoPart}+bestaudio/best";
             }
 
-            return $"{videoPart}+bestaudio[language={audioLanguage}]/{videoPart}+bestaudio/best";
+            return $"{videoPart}+bestaudio[language={audioLanguage}]/{videoPart}+bestaudio[language^={audioLanguage}]/{videoPart}+bestaudio/best";
         }
 
         if (string.IsNullOrWhiteSpace(quality) || quality.Contains("Default", StringComparison.OrdinalIgnoreCase))
@@ -2011,15 +2130,22 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
         return (null, cleanError);
     }
 
-    private static string ExtractMeaningfulYtDlpError(string? stderr)
+    private static string ExtractMeaningfulYtDlpError(string? stderr, string? stdout = null)
     {
-        if (string.IsNullOrWhiteSpace(stderr)) return "yt-dlp failed to process URL";
+        var text = string.IsNullOrWhiteSpace(stderr) ? (stdout ?? string.Empty) : stderr;
+        if (string.IsNullOrWhiteSpace(text)) return "yt-dlp failed to process URL";
 
-        var lines = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var botCheck = lines.FirstOrDefault(l => l.Contains("Sign in to confirm", StringComparison.OrdinalIgnoreCase));
         if (botCheck != null)
         {
             return "YouTube requested bot verification: Sign in to confirm you're not a bot. Please remove VPN/proxy or configure cookies.txt in Settings.";
+        }
+
+        var aria2cError = lines.FirstOrDefault(l => l.Contains("errorCode=1", StringComparison.OrdinalIgnoreCase) || l.Contains("aria2c exited with code 1", StringComparison.OrdinalIgnoreCase));
+        if (aria2cError != null)
+        {
+            return "Downloader network error occurred while fetching media stream.";
         }
 
         var errorLine = lines.FirstOrDefault(l => l.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase));
@@ -2035,6 +2161,26 @@ $@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""yes""?>
         }
 
         return lines.LastOrDefault() ?? "yt-dlp exited with an error";
+    }
+
+    private static bool IsAria2cFailure(string? stderr, string? stdout, string? errorMessage)
+    {
+        var combined = $"{stderr} {stdout} {errorMessage}";
+        return combined.Contains("errorCode=1", StringComparison.OrdinalIgnoreCase) ||
+               combined.Contains("unreachable network", StringComparison.OrdinalIgnoreCase) ||
+               combined.Contains("aria2c exited with code 1", StringComparison.OrdinalIgnoreCase) ||
+               combined.Contains("aria2c: error", StringComparison.OrdinalIgnoreCase) ||
+               combined.Contains("A socket operation was attempted to an unreachable network", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSubtitleOr429Failure(string? stderr, string? stdout, string? errorMessage)
+    {
+        var combined = $"{stderr} {stdout} {errorMessage}";
+        return combined.Contains("429", StringComparison.OrdinalIgnoreCase) ||
+               combined.Contains("Too Many Requests", StringComparison.OrdinalIgnoreCase) ||
+               combined.Contains("Unable to download video subtitles", StringComparison.OrdinalIgnoreCase) ||
+               combined.Contains("timedtext", StringComparison.OrdinalIgnoreCase) ||
+               combined.Contains("subtitles for", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsForbiddenOrBotBlocked(string? stderr, string? errorMessage)

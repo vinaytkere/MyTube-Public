@@ -116,8 +116,8 @@ public class MediaOutputValidator
             }
             else if (expectedClassification == MediaClassification.AudioOnly)
             {
-                // MP3 padding / AAC priming frames: allow up to 3.0s or 3%
-                maxAllowedDrift = Math.Max(3.0, expectedDuration.TotalSeconds * 0.03);
+                // MP3 padding / AAC priming frames / YouTube container metadata drift: allow up to 5.0s or 5%
+                maxAllowedDrift = Math.Max(5.0, expectedDuration.TotalSeconds * 0.05);
             }
             else
             {

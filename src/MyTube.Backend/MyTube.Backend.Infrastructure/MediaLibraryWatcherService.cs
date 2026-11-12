@@ -21,7 +21,7 @@ public class MediaLibraryWatcherService : BackgroundService
     private FileSystemWatcher? _watcher;
 
     private readonly ConcurrentDictionary<string, Timer> _debouncedFiles = new(StringComparer.OrdinalIgnoreCase);
-    private readonly string[] _supportedExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".3gp", ".mp3", ".m4a"];
+    private readonly string[] _supportedExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".3gp", ".mp3", ".m4a", ".opus", ".wav", ".ogg", ".flac", ".aac"];
     private readonly TimeSpan _debounceDelay = TimeSpan.FromSeconds(6);
 
     public bool IsWatching => _watcher != null && _watcher.EnableRaisingEvents;

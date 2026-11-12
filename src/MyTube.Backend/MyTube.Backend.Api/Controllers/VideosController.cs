@@ -123,7 +123,7 @@ public class VideosController : ControllerBase
         var ext = Path.GetExtension(filePath).ToLowerInvariant();
 
         // If natively supported format, stream directly using physical ranges
-        if ((ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".mp3" || ext == ".m4a") && (!audioTrack.HasValue || audioTrack.Value == 0))
+        if ((ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".mp3" || ext == ".m4a" || ext == ".opus" || ext == ".wav" || ext == ".flac" || ext == ".aac") && (!audioTrack.HasValue || audioTrack.Value == 0))
         {
             var contentType = ext switch
             {
@@ -132,6 +132,10 @@ public class VideosController : ControllerBase
                 ".ogg" => "video/ogg",
                 ".mp3" => "audio/mpeg",
                 ".m4a" => "audio/mp4",
+                ".opus" => "audio/opus",
+                ".wav" => "audio/wav",
+                ".flac" => "audio/flac",
+                ".aac" => "audio/aac",
                 _ => "video/mp4"
             };
             return PhysicalFile(filePath, contentType, enableRangeProcessing: true);
@@ -252,6 +256,10 @@ public class VideosController : ControllerBase
             ".mov" => "video/quicktime",
             ".mp3" => "audio/mpeg",
             ".m4a" => "audio/mp4",
+            ".opus" => "audio/opus",
+            ".wav" => "audio/wav",
+            ".flac" => "audio/flac",
+            ".aac" => "audio/aac",
             _ => "application/octet-stream"
         };
 

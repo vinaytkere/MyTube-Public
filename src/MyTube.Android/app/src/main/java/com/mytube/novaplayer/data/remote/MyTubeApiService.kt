@@ -15,7 +15,8 @@ data class DownloadRequest(
     val audioSampleRate: Int? = null,
     val audioChannels: Int? = null,
     val includeSubtitles: Boolean = false,
-    val subtitleLanguage: String? = null
+    val subtitleLanguage: String? = null,
+    val audioLanguage: String? = null
 )
 
 data class VideoProbeResultDto(
