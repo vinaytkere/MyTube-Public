@@ -228,7 +228,7 @@ Comprehensive guides are available in the [`docs/`](docs/) directory:
 
 ## Technology Stack
 
-- **Backend:** C# / ASP.NET Core 10 (Minimal APIs, Clean Architecture, MediatR CQRS, EF Core with SQLite)
+- **Backend:** C# / ASP.NET Core 10 (API Controllers, Clean Architecture, MediatR CQRS, EF Core with SQLite)
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons
 - **Media Processing:** FFmpeg, FFprobe, yt-dlp, Deno runtime
 - **VPN / Networking:** Gluetun (WireGuard client with iptables killswitch), Transmission daemon

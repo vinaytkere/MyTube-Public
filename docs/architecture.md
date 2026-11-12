@@ -15,7 +15,7 @@ This document details the architectural principles, system topology, concurrency
 |   |                                                                         |   |
 |   |   +---------------------+         +---------------------------------+   |   |
 |   |   |  Vite React 19 SPA  | <=====> |   ASP.NET Core 10 Web API       |   |   |
-|   |   |  (Compiled Assets)  |         |   (Minimal APIs + Middleware)   |   |   |
+|   |   |  (Compiled Assets)  |         |   (Controllers + Middleware)    |   |   |
 |   |   +---------------------+         +----------------+----------------+   |   |
 |   |                                                    |                    |   |
 |   |            +-------------------+-------------------+                    |   |
@@ -71,7 +71,7 @@ The backend adheres strictly to Clean Architecture separation of concerns:
 
 ### `MyTube.Backend.Api`
 - ASP.NET Core 10 Web host.
-- Registers HTTP endpoints using Minimal APIs.
+- Registers REST endpoints using ASP.NET Core API Controllers (`app.MapControllers()`) and Minimal API routes for health checks (`/health`).
 - Serves pre-built Vite React SPA static assets (`UseDefaultFiles`, `UseStaticFiles`, `MapFallbackToFile`).
 - Configures Data Protection key persistence, authentication middleware, and CORS policies.
 
