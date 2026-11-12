@@ -190,6 +190,8 @@ VPN_ADDRESSES=""
 
 if [ "$ENABLE_TORRENT" = true ]; then
     echo -e "\n${CYAN}[10/16] WireGuard VPN Configuration${RESET}"
+    echo "Requires WireGuard settings from your VPN provider (see docs/vpn-setup.md)."
+    echo "Tip: In your provider's .conf file, look for 'Address' and 'PrivateKey' under [Interface]."
     read -p "VPN Provider (mullvad/protonvpn/ivpn/airvpn/custom) [custom]: " VPN_PROVIDER_IN
     VPN_PROVIDER=${VPN_PROVIDER_IN:-custom}
 

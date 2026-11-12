@@ -4,7 +4,137 @@ MyTube includes an optional torrent downloader component (Transmission) designed
 
 ---
 
-## Architecture: Fail-Closed Killswitch
+## 1. Quick Overview & Official WireGuard Links
+
+- **Official WireGuard Project:** [https://www.wireguard.com/](https://www.wireguard.com/)
+- **Official WireGuard Software Downloads:** [https://www.wireguard.com/install/](https://www.wireguard.com/install/)
+
+> [!NOTE]
+> **Do you need to install WireGuard on your host OS?**  
+> **No.** When you enable torrents in MyTube, the setup script deploys the WireGuard client automatically inside the `mytube-vpn` (Gluetun) Docker container.  
+> You only need to provide your **VPN Provider**, your **Assigned Client IP/CIDR**, and your **Private Key**.
+
+---
+
+## 2. Understanding the Required Settings
+
+During setup step `[10/16] WireGuard VPN Configuration`, the installer prompts:
+
+| Prompt | What It Means | Where to Find It | Example |
+| :--- | :--- | :--- | :--- |
+| **VPN Provider** | The name of your VPN service (supported natively by Gluetun) | Your VPN provider name | `mullvad`, `protonvpn`, `airvpn`, `ivpn`, or `custom` |
+| **Assigned Client IP/CIDR** | The internal tunnel IP address given to your client by the VPN | `Address =` inside your WireGuard `.conf` file | `10.2.0.2/32` or `10.64.0.2/32` |
+| **WireGuard Private Key** | 32-byte Base64-encoded secret key used to authenticate your device | `PrivateKey =` inside your WireGuard `.conf` file | `8LBUNcJwJcs3aXd+wuxPcEG8dMaPjatDwuZaO6dtKWY=` |
+
+Inside any standard WireGuard configuration file (`.conf`), these map directly:
+
+```ini
+[Interface]
+PrivateKey = <Your WireGuard Private Key>       <-- Paste into "WireGuard Private Key"
+Address = <Your Assigned Client IP/CIDR>        <-- Paste into "WireGuard Assigned Client IP/CIDR"
+DNS = 10.2.0.1
+
+[Peer]
+PublicKey = <VPN Server Public Key>             <-- Required only if VPN Provider is "custom"
+Endpoint = <VPN Server IP:Port>                 <-- Required only if VPN Provider is "custom"
+AllowedIPs = 0.0.0.0/0
+```
+
+---
+
+## 3. Step-by-Step: Obtaining Credentials from Providers
+
+### Option 1: Mullvad VPN
+1. Log into your account on the [Mullvad Account Page](https://mullvad.net/account).
+2. Go to **WireGuard configuration** ([mullvad.net/account/#/wireguard-config](https://mullvad.net/account/#/wireguard-config)).
+3. Click **Generate a new key** (or select an existing device key).
+4. Select your preferred exit country and city.
+5. Click **Download file** to get the `.conf` file.
+6. Open the downloaded file in a text editor:
+   - Copy `Address` (e.g. `10.64.12.34/32`)
+   - Copy `PrivateKey` (e.g. `yAnZ...=`)
+7. In the MyTube installer:
+   - **VPN Provider**: `mullvad`
+   - **Assigned Client IP**: Paste `Address`
+   - **Private Key**: Paste `PrivateKey`
+
+---
+
+### Option 2: Proton VPN (Free or Paid)
+1. Log into your [Proton VPN Account Dashboard](https://account.protonvpn.com/).
+2. In the left navigation bar, click **Downloads**, then scroll to **WireGuard configuration** ([account.protonvpn.com/downloads#wireguard-configuration](https://account.protonvpn.com/downloads#wireguard-configuration)).
+3. Select your device/platform: Choose **GNU/Linux** or **Router**.
+4. Select the server location/category you want and click **Create** / **Download configuration**.
+5. Open the downloaded `.conf` file:
+   - Copy `Address` (e.g. `10.2.0.2/32`)
+   - Copy `PrivateKey`
+6. In the MyTube installer:
+   - **VPN Provider**: `protonvpn`
+   - **Assigned Client IP**: Paste `Address`
+   - **Private Key**: Paste `PrivateKey`
+
+---
+
+### Option 3: AirVPN, IVPN, Windscribe, or TorGuard
+1. Log into your VPN provider's user dashboard.
+2. Navigate to the **WireGuard Configuration Generator** or **Manual Setup** tab.
+3. Generate a key pair and download the configuration file (`.conf`).
+4. Copy `Address` and `PrivateKey` from under the `[Interface]` header.
+5. In the MyTube installer, type your provider name (e.g., `airvpn`, `ivpn`, etc.).
+
+---
+
+### Option 4: Custom VPS / Self-Hosted WireGuard Server
+
+If you operate your own WireGuard server (e.g. on Oracle Cloud, AWS, DigitalOcean, or Hetzner):
+
+#### Step 1: Install WireGuard Tools on your machine (to generate keys)
+- **Linux (Ubuntu/Debian):**
+  ```bash
+  sudo apt update && sudo apt install -y wireguard-tools
+  ```
+- **Linux (Fedora/RHEL):**
+  ```bash
+  sudo dnf install -y wireguard-tools
+  ```
+- **macOS (via Homebrew):**
+  ```bash
+  brew install wireguard-tools
+  ```
+- **Windows:**
+  Download and install the official client from [https://www.wireguard.com/install/](https://www.wireguard.com/install/). Alternatively, use PowerShell to generate a base64 key or use WSL.
+
+#### Step 2: Generate a WireGuard Key Pair
+```bash
+wg genkey | tee privatekey | wg pubkey > publickey
+```
+- The `privatekey` file contains your **Client Private Key**.
+- The `publickey` file is your **Client Public Key**, which you register on your server (`/etc/wireguard/wg0.conf`).
+
+#### Step 3: Configure the Client Peer on Your Server
+Add your client peer to your server config:
+```ini
+[Peer]
+PublicKey = <Contents of client publickey>
+AllowedIPs = 10.213.122.4/32
+```
+
+#### Step 4: Run MyTube Setup
+In the MyTube installer:
+- **VPN Provider**: `custom`
+- **WireGuard Assigned Client IP/CIDR**: `10.213.122.4/32`
+- **WireGuard Private Key**: Paste contents of `privatekey`
+
+Then add your server's endpoint and public key to `.env`:
+```env
+WIREGUARD_PUBLIC_KEY=<Server_Public_Key>
+WIREGUARD_ENDPOINT_IP=<Server_Public_IP>
+WIREGUARD_ENDPOINT_PORT=51820
+```
+
+---
+
+## 4. Architecture: Fail-Closed Killswitch
 
 ```
 +-------------------------------------------------------------+

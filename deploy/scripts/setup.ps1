@@ -139,6 +139,8 @@ $vpnAddresses = ""
 
 if ($enableTorrent -eq "true") {
     Write-Host "`n[10/16] WireGuard VPN Configuration" -ForegroundColor Cyan
+    Write-Host "Requires WireGuard settings from your VPN provider (see docs/vpn-setup.md)." -ForegroundColor DarkGray
+    Write-Host "Tip: In your provider's .conf file, look for 'Address' and 'PrivateKey' under [Interface]." -ForegroundColor DarkGray
     $vpnProviderIn = Read-Host "VPN Provider (mullvad/protonvpn/ivpn/airvpn/custom) [custom]"
     if ($vpnProviderIn) { $vpnProvider = $vpnProviderIn }
     $vpnAddresses = Read-Host "WireGuard Assigned Client IP/CIDR (e.g. 10.2.0.2/32)"
