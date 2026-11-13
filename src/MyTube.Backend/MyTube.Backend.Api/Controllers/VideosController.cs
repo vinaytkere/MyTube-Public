@@ -147,19 +147,23 @@ public class VideosController : ControllerBase
         var startSecondsStr = start.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
         var audioMap = audioTrack.HasValue ? $"-map 0:a:{audioTrack.Value}" : "-map 0:a:0";
 
-        var isH264 = (!string.IsNullOrWhiteSpace(video.VideoCodec) &&
-                      (video.VideoCodec.Contains("264", StringComparison.OrdinalIgnoreCase) ||
-                       video.VideoCodec.Contains("avc", StringComparison.OrdinalIgnoreCase)))
-                     || (!string.IsNullOrWhiteSpace(video.FileName) &&
-                         (video.FileName.Contains("264", StringComparison.OrdinalIgnoreCase) ||
-                          video.FileName.Contains("avc", StringComparison.OrdinalIgnoreCase)));
-        var vcodec = isH264 ? "copy" : "libx264 -preset ultrafast -tune zerolatency -crf 26";
+        var isWebCompatibleVideo = string.IsNullOrWhiteSpace(video.VideoCodec) ||
+            video.VideoCodec.Contains("264", StringComparison.OrdinalIgnoreCase) ||
+            video.VideoCodec.Contains("avc", StringComparison.OrdinalIgnoreCase) ||
+            video.VideoCodec.Contains("265", StringComparison.OrdinalIgnoreCase) ||
+            video.VideoCodec.Contains("hevc", StringComparison.OrdinalIgnoreCase) ||
+            video.VideoCodec.Contains("vp9", StringComparison.OrdinalIgnoreCase) ||
+            video.VideoCodec.Contains("vp09", StringComparison.OrdinalIgnoreCase) ||
+            video.VideoCodec.Contains("av1", StringComparison.OrdinalIgnoreCase) ||
+            video.VideoCodec.Contains("av01", StringComparison.OrdinalIgnoreCase) ||
+            ext == ".mp4" || ext == ".webm" || ext == ".mkv";
+        var vcodec = isWebCompatibleVideo ? "copy" : "libx264 -preset ultrafast -tune zerolatency -crf 26";
 
         var isAac = (!string.IsNullOrWhiteSpace(video.AudioCodec) &&
                      video.AudioCodec.Contains("aac", StringComparison.OrdinalIgnoreCase))
                     || (!string.IsNullOrWhiteSpace(video.FileName) &&
                         video.FileName.Contains("aac", StringComparison.OrdinalIgnoreCase));
-        var acodec = isAac ? "copy" : "aac -b:a 128k";
+        var acodec = isAac ? "copy" : "aac -b:a 192k";
 
         var args = start > 0
             ? $"-ss {startSecondsStr} -i \"{filePath}\" -map 0:v:0 {audioMap} -sn -c:v {vcodec} -c:a {acodec} -avoid_negative_ts make_zero -f mp4 -movflags frag_keyframe+empty_moov+default_base_moof pipe:1"

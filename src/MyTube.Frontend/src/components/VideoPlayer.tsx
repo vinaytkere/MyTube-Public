@@ -135,6 +135,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
     }
   };
 
+  const handleCanPlay = () => {
+    if (isNative && resumePosition > 0 && playerRef.current) {
+      if (Math.abs(playerRef.current.currentTime - resumePosition) > 1) {
+        playerRef.current.currentTime = resumePosition;
+      }
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (playerRef.current) {
@@ -165,7 +173,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
 
   const topControlsContent = (
     <div className="flex items-center gap-2 pointer-events-auto">
-      {audioTrackSelector}
       <span className="text-[10px] font-mono-telemetry font-bold border border-[#21242d] bg-[#0c0e12]/90 backdrop-blur-md text-[#3cd69b] px-2 py-0.5 rounded-md uppercase select-none tracking-widest hidden sm:inline-block">
         {isNative ? 'Native Direct Play' : 'FFmpeg Remuxing'}
       </span>
@@ -190,8 +197,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
         </div>
 
         <div className="flex items-center gap-2">
-          {audioTrackSelector}
-
           <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#121418] border border-[#21242d] text-cyan-400 text-[11px]">
             <Sparkles size={12} />
             <span>Whisper Live Subtitles</span>
@@ -217,7 +222,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
 
           <div className="w-full max-w-2xl">
             <MediaPlayer
-              key={`${video.id}-${selectedAudioTrack}-${transcodeStart}`}
+              key={video.id}
               ref={playerRef}
               title={video.displayTitle}
               src={mediaSource}
@@ -232,6 +237,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
               onPause={handlePause}
               onEnded={handleEnded}
               onSeeked={handleSeeked}
+              onCanPlay={handleCanPlay}
               className="w-full rounded-xl overflow-hidden"
             >
               <MediaProvider>
@@ -261,7 +267,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
       ) : (
         <div className="video-player-container w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-[#21242d] bg-black relative">
           <MediaPlayer
-            key={`${video.id}-${selectedAudioTrack}-${transcodeStart}`}
+            key={video.id}
             ref={playerRef}
             title={video.displayTitle}
             src={mediaSource}
@@ -279,6 +285,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
             onPause={handlePause}
             onEnded={handleEnded}
             onSeeked={handleSeeked}
+            onCanPlay={handleCanPlay}
             className="w-full h-full"
           >
             <MediaProvider>
@@ -307,7 +314,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
               download={downloadUrl}
               slots={{
                 afterVolumeSlider: audioTrackSelector,
-                beforeCaptionButton: audioTrackSelector,
                 topControlsGroupEnd: topControlsContent,
               }}
             />
