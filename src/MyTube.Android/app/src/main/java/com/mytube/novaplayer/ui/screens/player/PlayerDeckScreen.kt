@@ -65,6 +65,8 @@ fun PlayerDeckScreen(
     val durationMs by playerManager.durationMs.collectAsState()
     val volume by playerManager.volume.collectAsState()
     val speed by playerManager.playbackSpeed.collectAsState()
+    val isPortraitVideo by playerManager.isPortraitVideo.collectAsState()
+    val videoAspectRatio by playerManager.videoAspectRatio.collectAsState()
 
     SideEffect {
         Log.i("NOVA_DEBUG", "PlayerDeckScreen recomposed: currentMedia='${currentMedia?.title}' (id=${currentMedia?.id}, isVideo=${currentMedia?.isVideo}), isPlaying=$isPlaying")
@@ -79,8 +81,36 @@ fun PlayerDeckScreen(
 
     var isFullscreen by remember { mutableStateOf(false) }
     var showFullscreenControls by remember { mutableStateOf(true) }
+    var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
 
-    val isEffectiveFullscreen = (isVideo && isDeviceLandscape) || isFullscreen
+    val enterFullscreen = {
+        val targetOrientation = if (isPortraitVideo) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        isFullscreen = true
+        activity?.requestedOrientation = targetOrientation
+    }
+
+    val exitFullscreen = {
+        isFullscreen = false
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
+    val isEffectiveFullscreen = isFullscreen || (isVideo && isDeviceLandscape && !isPortraitVideo)
+
+    // Synchronize fullscreen orientation if media changes or orientation is determined while in fullscreen
+    LaunchedEffect(currentMedia?.id, isPortraitVideo, isFullscreen) {
+        if (isFullscreen) {
+            val targetOrientation = if (isPortraitVideo) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+            activity?.requestedOrientation = targetOrientation
+        }
+    }
 
     // Immersive Mode System Bars Controller
     val window = activity?.window
@@ -111,8 +141,7 @@ fun PlayerDeckScreen(
     // Intercept back button in fullscreen mode
     BackHandler(enabled = isEffectiveFullscreen) {
         if (isFullscreen) {
-            isFullscreen = false
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            exitFullscreen()
         } else {
             onBack()
         }
@@ -169,10 +198,7 @@ fun PlayerDeckScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = {
-                        isFullscreen = true
-                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    }) {
+                    IconButton(onClick = enterFullscreen) {
                         Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Primary)
                     }
 
@@ -196,9 +222,19 @@ fun PlayerDeckScreen(
                     }
             } else {
                 Modifier
-                    .fillMaxWidth()
+                    .align(Alignment.CenterHorizontally)
                     .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .aspectRatio(16f / 9f)
+                    .then(
+                        if (isPortraitVideo) {
+                            Modifier
+                                .height(340.dp)
+                                .aspectRatio(videoAspectRatio.coerceIn(0.5f, 0.75f), matchHeightConstraintsFirst = true)
+                        } else {
+                            Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                        }
+                    )
                     .clip(RoundedCornerShape(16.dp))
                     .background(SurfaceContainerLowest)
             }
@@ -208,12 +244,13 @@ fun PlayerDeckScreen(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
                         useController = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        this.resizeMode = resizeMode
                         playerManager.attachPlayerView(this)
                     }
                 },
                 update = { view ->
                     playerManager.attachPlayerView(view)
+                    view.resizeMode = resizeMode
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -248,8 +285,7 @@ fun PlayerDeckScreen(
                             ) {
                                 IconButton(onClick = {
                                     if (isFullscreen) {
-                                        isFullscreen = false
-                                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                        exitFullscreen()
                                     } else {
                                         onBack()
                                     }
@@ -271,6 +307,22 @@ fun PlayerDeckScreen(
                             ) {
                                 IconButton(
                                     onClick = {
+                                        resizeMode = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
+                                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                        } else {
+                                            AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) Icons.Default.AspectRatio else Icons.Default.FitScreen,
+                                        contentDescription = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) "Fill Screen" else "Fit Screen",
+                                        tint = Secondary
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
                                         if (isDeviceLandscape) {
                                             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                                         } else {
@@ -286,12 +338,7 @@ fun PlayerDeckScreen(
                                 }
 
                                 if (isFullscreen) {
-                                    IconButton(
-                                        onClick = {
-                                            isFullscreen = false
-                                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                                        }
-                                    ) {
+                                    IconButton(onClick = exitFullscreen) {
                                         Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Primary)
                                     }
                                 }
@@ -386,12 +433,7 @@ fun PlayerDeckScreen(
                                     )
                                 }
 
-                                IconButton(
-                                    onClick = {
-                                        isFullscreen = false
-                                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                                    }
-                                ) {
+                                IconButton(onClick = exitFullscreen) {
                                     Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Primary)
                                 }
                             }
@@ -419,17 +461,14 @@ fun PlayerDeckScreen(
                             .background(SurfaceContainerHigh.copy(alpha = 0.8f))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text(text = "16:9", style = Typography.labelSmall, color = Secondary)
+                        Text(text = if (isPortraitVideo) "9:16" else "16:9", style = Typography.labelSmall, color = Secondary)
                     }
 
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .background(PrimaryContainer.copy(alpha = 0.85f))
-                            .clickable {
-                                isFullscreen = true
-                                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                            }
+                            .clickable(onClick = enterFullscreen)
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Row(

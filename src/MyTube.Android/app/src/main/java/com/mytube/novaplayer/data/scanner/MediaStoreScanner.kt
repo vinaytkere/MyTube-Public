@@ -42,7 +42,8 @@ class MediaStoreScanner(private val context: Context) {
             MediaStore.Video.Media.MIME_TYPE,
             MediaStore.Video.Media.DATA,
             MediaStore.Video.Media.WIDTH,
-            MediaStore.Video.Media.HEIGHT
+            MediaStore.Video.Media.HEIGHT,
+            MediaStore.Video.Media.ORIENTATION
         )
 
         context.contentResolver.query(
@@ -60,6 +61,7 @@ class MediaStoreScanner(private val context: Context) {
             val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
             val widthCol = cursor.getColumnIndex(MediaStore.Video.Media.WIDTH)
             val heightCol = cursor.getColumnIndex(MediaStore.Video.Media.HEIGHT)
+            val orientCol = cursor.getColumnIndex(MediaStore.Video.Media.ORIENTATION)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
@@ -70,12 +72,16 @@ class MediaStoreScanner(private val context: Context) {
                 val path = cursor.getString(dataCol) ?: ""
                 val width = if (widthCol != -1) cursor.getInt(widthCol) else 0
                 val height = if (heightCol != -1) cursor.getInt(heightCol) else 0
+                val orientation = if (orientCol != -1) cursor.getInt(orientCol) else 0
+                val isRotated = orientation == 90 || orientation == 270
+                val effWidth = if (isRotated) height else width
+                val effHeight = if (isRotated) width else height
 
                 val contentUri = ContentUris.withAppendedId(collection, id).toString()
 
                 // Generate codec badges
                 val badges = mutableListOf<String>()
-                val maxDim = maxOf(width, height)
+                val maxDim = maxOf(effWidth, effHeight)
                 when {
                     maxDim >= 3840 -> badges.add("4K HDR")
                     maxDim >= 1920 -> badges.add("1080p")
@@ -95,7 +101,9 @@ class MediaStoreScanner(private val context: Context) {
                         mimeType = mime,
                         path = path,
                         codecBadges = badges,
-                        artistOrSubtitle = "Video Stream"
+                        artistOrSubtitle = "Video Stream",
+                        width = effWidth,
+                        height = effHeight
                     )
                 )
             }
@@ -242,6 +250,8 @@ class MediaStoreScanner(private val context: Context) {
                 var duration = 0L
                 var title = file.nameWithoutExtension
                 var artist = if (isVideo) "Video File" else "Downloaded Audio"
+                var fileWidth = 0
+                var fileHeight = 0
 
                 try {
                     val mmr = MediaMetadataRetriever()
@@ -257,6 +267,17 @@ class MediaStoreScanner(private val context: Context) {
                     val metaArtist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
                     if (!metaArtist.isNullOrBlank()) {
                         artist = metaArtist
+                    }
+                    if (isVideo) {
+                        val wStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                        val hStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                        val rotStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                        val rawW = wStr?.toIntOrNull() ?: 0
+                        val rawH = hStr?.toIntOrNull() ?: 0
+                        val rot = rotStr?.toIntOrNull() ?: 0
+                        val isRot = rot == 90 || rot == 270
+                        fileWidth = if (isRot) rawH else rawW
+                        fileHeight = if (isRot) rawW else rawH
                     }
                     mmr.release()
                 } catch (_: Exception) {}
@@ -290,7 +311,9 @@ class MediaStoreScanner(private val context: Context) {
                         mimeType = if (isVideo) "video/$ext" else "audio/$ext",
                         path = file.absolutePath,
                         codecBadges = badges,
-                        artistOrSubtitle = artist
+                        artistOrSubtitle = artist,
+                        width = fileWidth,
+                        height = fileHeight
                     )
                 )
             }

@@ -480,7 +480,9 @@ fun DownloadScreen(
                             isVideo = !isAudio,
                             mimeType = if (isAudio) "audio/mpeg" else "video/mp4",
                             path = "",
-                            artistOrSubtitle = "MyTube Server"
+                            artistOrSubtitle = "MyTube Server",
+                            width = video.width,
+                            height = video.height
                         )
                         onPlayMedia(item)
                     }

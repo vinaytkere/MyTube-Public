@@ -266,9 +266,10 @@ export const IptvPlayer: React.FC<IptvPlayerProps> = ({
           return;
         }
         setIsFullscreen(true);
-        // Lock to landscape in mobile if supported
+        // Lock to appropriate orientation in mobile if supported
         if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
-          (screen.orientation as any).lock('landscape').catch(() => {});
+          const isPortraitStream = video && video.videoHeight > video.videoWidth;
+          (screen.orientation as any).lock(isPortraitStream ? 'portrait' : 'landscape').catch(() => {});
         }
       } catch {
         if (video && (video as any).webkitEnterFullscreen) {

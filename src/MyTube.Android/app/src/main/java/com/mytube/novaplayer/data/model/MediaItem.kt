@@ -11,8 +11,15 @@ data class MediaItem(
     val path: String,
     val codecBadges: List<String> = emptyList(),
     val isDownloaded: Boolean = false,
-    val artistOrSubtitle: String = ""
+    val artistOrSubtitle: String = "",
+    val width: Int = 0,
+    val height: Int = 0
 ) {
+    val isPortrait: Boolean
+        get() = width > 0 && height > 0 && height > width
+
+    val aspectRatio: Float
+        get() = if (width > 0 && height > 0) width.toFloat() / height.toFloat() else (16f / 9f)
     val formattedDuration: String
         get() {
             val totalSeconds = durationMs / 1000

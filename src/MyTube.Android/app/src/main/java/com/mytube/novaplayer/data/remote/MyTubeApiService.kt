@@ -62,7 +62,9 @@ data class VideoDto(
     val downloadUrl: String? = null,
     val thumbnailUrl: String? = null,
     @SerializedName("sourceUrl") val sourceUrl: String? = null,
-    @SerializedName("filePath") val filePath: String? = null
+    @SerializedName("filePath") val filePath: String? = null,
+    val width: Int = 0,
+    val height: Int = 0
 ) {
     val title: String
         get() = displayTitle?.ifBlank { null } ?: rawTitle?.ifBlank { null } ?: fileName ?: "Untitled Video"

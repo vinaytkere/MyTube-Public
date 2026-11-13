@@ -15,7 +15,7 @@ import {
 import '@vidstack/react/player/styles/default/theme.css';
 import '@vidstack/react/player/styles/default/layouts/video.css';
 import '@vidstack/react/player/styles/default/layouts/audio.css';
-import { Volume2, Music, Sparkles, Activity } from 'lucide-react';
+import { Volume2, Music, Sparkles, Activity, RotateCw } from 'lucide-react';
 import { Badge } from '@mantine/core';
 import { Video } from '../types';
 import { api } from '../services/api';
@@ -35,6 +35,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
   const [transcodeStart, setTranscodeStart] = useState<number>(startPosition);
   const [resumePosition, setResumePosition] = useState<number>(startPosition);
   const [, setIsPaused] = useState<boolean>(true);
+
+  // Aspect ratio and orientation detection (portrait vs landscape)
+  const isInitiallyPortrait = useMemo(() => {
+    return video.width > 0 && video.height > 0 && video.height > video.width;
+  }, [video.width, video.height]);
+
+  const [isPortrait, setIsPortrait] = useState<boolean>(isInitiallyPortrait);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<string>(
+    video.width > 0 && video.height > 0
+      ? `${video.width}/${video.height}`
+      : (isInitiallyPortrait ? '9/16' : '16/9')
+  );
+
+  useEffect(() => {
+    const portrait = video.width > 0 && video.height > 0 && video.height > video.width;
+    setIsPortrait(portrait);
+    if (video.width > 0 && video.height > 0) {
+      setVideoAspectRatio(`${video.width}/${video.height}`);
+    } else {
+      setVideoAspectRatio(portrait ? '9/16' : '16/9');
+    }
+  }, [video.id, video.width, video.height]);
 
   // Check if browser natively supports the video format directly without backend remuxing
   const ext = video.fileName.split('.').pop()?.toLowerCase() || '';
@@ -143,6 +165,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
     }
   };
 
+  const handleLoadedMetadata = () => {
+    const videoEl = (playerRef.current as any)?.el?.querySelector('video') as HTMLVideoElement | null;
+    if (videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+      const w = videoEl.videoWidth;
+      const h = videoEl.videoHeight;
+      const portrait = h > w;
+      setIsPortrait(portrait);
+      setVideoAspectRatio(`${w}/${h}`);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (playerRef.current) {
@@ -150,6 +183,52 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
       }
     };
   }, [saveProgress]);
+
+  // Synchronize fullscreen orientation on mobile browsers
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      if (isFs) {
+        if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
+          const videoEl = (playerRef.current as any)?.el?.querySelector('video') as HTMLVideoElement | null;
+          const currentIsPortrait = videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0
+            ? videoEl.videoHeight > videoEl.videoWidth
+            : isPortrait;
+          (screen.orientation as any).lock(currentIsPortrait ? 'portrait' : 'landscape').catch(() => {});
+        }
+      } else {
+        if (screen.orientation && typeof (screen.orientation as any).unlock === 'function') {
+          (screen.orientation as any).unlock().catch(() => {});
+        }
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, [isPortrait]);
+
+  const handleToggleOrientation = async () => {
+    if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
+      try {
+        const currentType = screen.orientation.type || '';
+        const isCurrentLandscape = currentType.includes('landscape');
+        const targetOrientation = isCurrentLandscape ? 'portrait' : 'landscape';
+        await (screen.orientation as any).lock(targetOrientation);
+      } catch (err) {
+        console.warn('Manual orientation toggle failed:', err);
+      }
+    }
+  };
 
   const audioTrackSelector = video.audioTracks && video.audioTracks.length > 1 ? (
     <div className="flex items-center gap-1.5 text-xs bg-[#121418]/95 hover:bg-[#171920] border border-[#3cd69b]/60 rounded-lg px-2.5 py-1 text-white backdrop-blur-md transition-all shadow-lg pointer-events-auto">
@@ -176,6 +255,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
       <span className="text-[10px] font-mono-telemetry font-bold border border-[#21242d] bg-[#0c0e12]/90 backdrop-blur-md text-[#3cd69b] px-2 py-0.5 rounded-md uppercase select-none tracking-widest hidden sm:inline-block">
         {isNative ? 'Native Direct Play' : 'FFmpeg Remuxing'}
       </span>
+      {typeof window !== 'undefined' && typeof screen !== 'undefined' && 'orientation' in screen && (
+        <button
+          onClick={handleToggleOrientation}
+          className="flex items-center gap-1 text-[11px] font-mono-telemetry font-semibold bg-[#121418]/90 hover:bg-[#1a1c22] border border-[#21242d] hover:border-[#3cd69b]/50 text-neutral-300 hover:text-white px-2 py-0.5 rounded-md transition-all shadow pointer-events-auto select-none"
+          title="Rotate Screen Orientation"
+          aria-label="Rotate Screen Orientation"
+        >
+          <RotateCw size={11} className="text-[#3cd69b]" />
+          <span className="hidden xs:inline">Rotate</span>
+        </button>
+      )}
     </div>
   );
 
@@ -265,7 +355,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
           </div>
         </div>
       ) : (
-        <div className="video-player-container w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-[#21242d] bg-black relative">
+        <div className={`video-player-container w-full rounded-2xl overflow-hidden shadow-2xl border border-[#21242d] bg-black relative transition-all duration-300 ${
+          isPortrait ? 'max-w-[440px] mx-auto aspect-[9/16] max-h-[78vh]' : 'aspect-video'
+        }`}>
           <MediaPlayer
             key={video.id}
             ref={playerRef}
@@ -273,7 +365,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
             src={mediaSource}
             poster={video.thumbnailUrl}
             viewType="video"
-            aspectRatio="16/9"
+            aspectRatio={videoAspectRatio}
+            fullscreenOrientation={isPortrait ? 'portrait' : 'landscape'}
             load="eager"
             preload="auto"
             currentTime={isNative ? (resumePosition > 0 ? resumePosition : (shouldResume ? startPosition : undefined)) : undefined}
@@ -281,6 +374,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
             playsInline
             crossOrigin="anonymous"
             onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
             onPlay={handlePlay}
             onPause={handlePause}
             onEnded={handleEnded}

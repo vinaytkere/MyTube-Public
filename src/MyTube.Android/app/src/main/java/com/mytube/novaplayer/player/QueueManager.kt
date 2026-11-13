@@ -76,7 +76,13 @@ class QueueManager(private val playerManager: PlayerManager) {
         _currentMedia.value = item
 
         playerManager.setAudioOnlyMode(!item.isVideo)
-        playerManager.playMedia(item.uri, filePath = item.path, mimeType = item.mimeType)
+        playerManager.playMedia(
+            mediaUri = item.uri,
+            filePath = item.path,
+            mimeType = item.mimeType,
+            initialWidth = item.width,
+            initialHeight = item.height
+        )
     }
 
     fun setQueue(
@@ -129,7 +135,13 @@ class QueueManager(private val playerManager: PlayerManager) {
                 // Default: Video plays in Video Mode
                 playerManager.setAudioOnlyMode(false)
             }
-            playerManager.playMedia(item.uri, filePath = item.path, mimeType = item.mimeType)
+            playerManager.playMedia(
+                mediaUri = item.uri,
+                filePath = item.path,
+                mimeType = item.mimeType,
+                initialWidth = item.width,
+                initialHeight = item.height
+            )
         } else {
             Log.w("NOVA_DEBUG", "QueueManager.playTrackAtIndex: index $index out of bounds for size ${list.size}")
         }

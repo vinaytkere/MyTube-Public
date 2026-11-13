@@ -15,6 +15,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -57,6 +58,15 @@ class PlayerManager(private val context: Context) {
 
     private val _isAudioOnlyMode = MutableStateFlow(false)
     val isAudioOnlyMode: StateFlow<Boolean> = _isAudioOnlyMode.asStateFlow()
+
+    private val _videoSize = MutableStateFlow(VideoSize.UNKNOWN)
+    val videoSize: StateFlow<VideoSize> = _videoSize.asStateFlow()
+
+    private val _isPortraitVideo = MutableStateFlow(false)
+    val isPortraitVideo: StateFlow<Boolean> = _isPortraitVideo.asStateFlow()
+
+    private val _videoAspectRatio = MutableStateFlow(16f / 9f)
+    val videoAspectRatio: StateFlow<Float> = _videoAspectRatio.asStateFlow()
 
     var onEndReachedListener: (() -> Unit)? = null
 
@@ -107,6 +117,23 @@ class PlayerManager(private val context: Context) {
 
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
             _playbackSpeed.value = playbackParameters.speed
+        }
+
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            _videoSize.value = videoSize
+            val rotation = videoSize.unappliedRotationDegrees
+            val isRotated = rotation == 90 || rotation == 270
+            val effectiveWidth = if (isRotated) videoSize.height else videoSize.width
+            val effectiveHeight = if (isRotated) videoSize.width else videoSize.height
+
+            if (effectiveWidth > 0 && effectiveHeight > 0) {
+                val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1.0f
+                val ratio = (effectiveWidth.toFloat() * pixelRatio) / effectiveHeight.toFloat()
+                _videoAspectRatio.value = ratio
+                val isPortrait = effectiveHeight > effectiveWidth
+                _isPortraitVideo.value = isPortrait
+                Log.i("NOVA_DEBUG", "PlayerManager onVideoSizeChanged: raw=${videoSize.width}x${videoSize.height}, rot=$rotation, eff=${effectiveWidth}x${effectiveHeight}, ratio=$ratio, isPortrait=$isPortrait")
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -219,9 +246,15 @@ class PlayerManager(private val context: Context) {
         mediaUri: String,
         filePath: String? = null,
         isNetworkStream: Boolean = false,
-        mimeType: String? = null
+        mimeType: String? = null,
+        initialWidth: Int = 0,
+        initialHeight: Int = 0
     ) {
-        Log.i("NOVA_DEBUG", "PlayerManager.playMedia called: mediaUri='$mediaUri', filePath='$filePath', mimeType='$mimeType'")
+        if (initialWidth > 0 && initialHeight > 0) {
+            _isPortraitVideo.value = initialHeight > initialWidth
+            _videoAspectRatio.value = initialWidth.toFloat() / initialHeight.toFloat()
+        }
+        Log.i("NOVA_DEBUG", "PlayerManager.playMedia called: mediaUri='$mediaUri', filePath='$filePath', mimeType='$mimeType', initialDims=${initialWidth}x$initialHeight")
         try {
             val uri: Uri = when {
                 // Priority 1: Already a valid MediaStore content URI -> Always use directly via ContentResolver
@@ -357,6 +390,9 @@ class PlayerManager(private val context: Context) {
         exoPlayer.clearMediaItems()
         _isPlaying.value = false
         _currentTimeMs.value = 0L
+        _videoSize.value = VideoSize.UNKNOWN
+        _isPortraitVideo.value = false
+        _videoAspectRatio.value = 16f / 9f
         stopProgressTracker()
         onEndReachedListener = listener
     }
