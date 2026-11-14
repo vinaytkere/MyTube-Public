@@ -182,18 +182,14 @@ If you have a `.conf` file from Mullvad, IVPN, TorGuard, ProtonVPN, or a self-ho
 
 2. Store the sensitive credentials in secret files:
    ```bash
-   echo -n "aaaaaa..." > secrets/wireguard_private_key.secret
-   echo -n "10.2.0.2/32" > secrets/wireguard_addresses.secret
-   chmod 600 secrets/wireguard_*.secret
+   echo -n "aaaaaa..." > deploy/secrets/wireguard_private_key.txt
+   chmod 600 deploy/secrets/wireguard_private_key.txt
    ```
 
 3. Configure server parameters in `.env`:
    ```env
-   VPN_SERVICE_PROVIDER=custom
-   VPN_TYPE=wireguard
-   WIREGUARD_PUBLIC_KEY=bbbbbb...
-   WIREGUARD_ENDPOINT_IP=198.51.100.1
-   WIREGUARD_ENDPOINT_PORT=51820
+   VPN_PROVIDER=custom
+   VPN_WIREGUARD_ADDRESSES=10.2.0.2/32
    ```
 
 ---

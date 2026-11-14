@@ -63,7 +63,7 @@ If you prefer to configure everything manually without the interactive wizard:
 ### Step 1: Create Required Directories
 
 ```bash
-mkdir -p data media downloads secrets
+mkdir -p data data/keys media media/downloads deploy/secrets data/backups
 ```
 
 ### Step 2: Configure Environment Variables
@@ -75,27 +75,30 @@ cp .env.example .env
 
 Edit `.env` to customize your ports and paths:
 ```env
-APP_PORT=5003
-DATA_PATH=./data
-MEDIA_PATH=./media
-DOWNLOADS_PATH=./downloads
+PORT=5003
+DATA_DIR=../data
+MEDIA_DIR=../media
+DOWNLOADS_DIR=../media/downloads
+CORS_ALLOWED_ORIGINS=http://localhost:5003,http://127.0.0.1:5003
 ```
 
 ### Step 3: Generate Security Secrets
 
-Create the sensitive secret files under the `secrets/` directory:
+Create the sensitive secret files under the `deploy/secrets/` directory:
 
 ```bash
 # Generate a cryptographically secure 256-bit JWT secret (minimum 32 characters)
-openssl rand -hex 32 > secrets/jwt_secret.secret
-chmod 600 secrets/jwt_secret.secret
+openssl rand -hex 32 > deploy/secrets/jwt_secret.txt
+openssl rand -hex 32 > deploy/secrets/encryption_key.txt
+touch deploy/secrets/gemini_api_key.txt deploy/secrets/groq_api_key.txt deploy/secrets/deepseek_api_key.txt deploy/secrets/wireguard_private_key.txt
+chmod 600 deploy/secrets/*.txt
 ```
 
 ### Step 4: Launch Containers
 
 To start the **core MyTube server**:
 ```bash
-docker compose -f deploy/docker-compose.yml up -d
+docker compose up -d
 ```
 
 To include the **WireGuard VPN + Torrent downloader**:

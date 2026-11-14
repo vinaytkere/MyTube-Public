@@ -40,9 +40,9 @@ services:
       - USER=${TRANSMISSION_USER:-admin}
       - PASS=${TRANSMISSION_PASS:-admin}
     volumes:
-      - ${DATA_DIR:-./data}/transmission-config:/config
-      - ${DOWNLOADS_DIR:-./media/downloads}:/downloads
-      - ${DOWNLOADS_DIR:-./media/downloads}/watch:/watch
+      - ${DATA_DIR:-../data}/transmission-config:/config
+      - ${DOWNLOADS_DIR:-../media/downloads}:/downloads
+      - ${DOWNLOADS_DIR:-../media/downloads}/watch:/watch
 
 secrets:
   wireguard_private_key:
@@ -50,5 +50,6 @@ secrets:
 
 networks:
   mytube-network:
-    external: true
+    name: mytube-network
+    driver: bridge
 

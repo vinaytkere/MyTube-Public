@@ -8,8 +8,12 @@ set -eo pipefail
 # using SQLite's VACUUM INTO command, and validates backup integrity.
 # ==============================================================================
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "${ROOT_DIR}"
+
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_DIR="./data/backups"
+BACKUP_DIR="${ROOT_DIR}/data/backups"
 BACKUP_FILE="mytube_backup_${TIMESTAMP}.db"
 
 mkdir -p "${BACKUP_DIR}"

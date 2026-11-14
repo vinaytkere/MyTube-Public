@@ -28,12 +28,12 @@ Google provides free access tiers with generous rate limits through Google AI St
    - Sign in and click **Get API key** > **Create API key**.
 2. **Configure MyTube:**
    ```bash
-   echo -n "YOUR_GEMINI_API_KEY" > secrets/gemini_api_key.secret
-   chmod 600 secrets/gemini_api_key.secret
+   echo -n "YOUR_GEMINI_API_KEY" > deploy/secrets/gemini_api_key.txt
+   chmod 600 deploy/secrets/gemini_api_key.txt
    ```
 3. In `.env`, set:
    ```env
-   AI_PROVIDER=gemini
+   ENABLE_AI=true
    ```
 
 ---
@@ -47,12 +47,12 @@ Groq provides extremely fast Llama-3 inference ideal for near-instantaneous tran
    - Navigate to **API Keys** and generate a new key.
 2. **Configure MyTube:**
    ```bash
-   echo -n "YOUR_GROQ_API_KEY" > secrets/groq_api_key.secret
-   chmod 600 secrets/groq_api_key.secret
+   echo -n "YOUR_GROQ_API_KEY" > deploy/secrets/groq_api_key.txt
+   chmod 600 deploy/secrets/groq_api_key.txt
    ```
 3. In `.env`, set:
    ```env
-   AI_PROVIDER=groq
+   ENABLE_AI=true
    ```
 
 ---
@@ -62,12 +62,12 @@ Groq provides extremely fast Llama-3 inference ideal for near-instantaneous tran
 1. Obtain your API key from the [DeepSeek Platform](https://platform.deepseek.com/).
 2. Save the key:
    ```bash
-   echo -n "YOUR_DEEPSEEK_API_KEY" > secrets/deepseek_api_key.secret
-   chmod 600 secrets/deepseek_api_key.secret
+   echo -n "YOUR_DEEPSEEK_API_KEY" > deploy/secrets/deepseek_api_key.txt
+   chmod 600 deploy/secrets/deepseek_api_key.txt
    ```
 3. In `.env`, set:
    ```env
-   AI_PROVIDER=deepseek
+   ENABLE_AI=true
    ```
 
 ---

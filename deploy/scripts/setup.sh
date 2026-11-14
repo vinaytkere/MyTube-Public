@@ -68,7 +68,21 @@ fi
 # ------------------------------------------------------------------------------
 echo -e "\n${CYAN}[3/16] Preparing application directories...${RESET}"
 mkdir -p "${ROOT_DIR}/data" "${ROOT_DIR}/data/keys" "${ROOT_DIR}/media" "${ROOT_DIR}/media/downloads" "${SECRETS_DIR}"
+chmod 775 "${ROOT_DIR}/data" "${ROOT_DIR}/data/keys" "${ROOT_DIR}/media" "${ROOT_DIR}/media/downloads" 2>/dev/null || true
 chmod 700 "${SECRETS_DIR}"
+
+# Clean up stale/empty legacy directories inside deploy/ if created by earlier runs
+if [ -d "${DEPLOY_DIR}/data" ] && [ -z "$(ls -A "${DEPLOY_DIR}/data" 2>/dev/null)" ]; then
+    rm -rf "${DEPLOY_DIR}/data" 2>/dev/null || true
+fi
+if [ -d "${DEPLOY_DIR}/media" ] && [ -z "$(ls -A "${DEPLOY_DIR}/media" 2>/dev/null)" ]; then
+    rm -rf "${DEPLOY_DIR}/media" 2>/dev/null || true
+fi
+
+# Ensure user 1000 ownership if setup is executed as root/sudo
+if [ "$EUID" -eq 0 ]; then
+    chown -R 1000:1000 "${ROOT_DIR}/data" "${ROOT_DIR}/media" "${SECRETS_DIR}" 2>/dev/null || true
+fi
 echo -e "${GREEN}✓ Directories created with secure permissions.${RESET}"
 
 # ------------------------------------------------------------------------------
@@ -204,14 +218,109 @@ fi
 # Step 11: Configure Media and Network Paths
 # ------------------------------------------------------------------------------
 echo -e "\n${CYAN}[11/16] Path and Port Configuration${RESET}"
-read -p "Port to expose on host [5003]: " INPUT_PORT
-PORT=${INPUT_PORT:-5003}
+
+is_port_in_use() {
+    local port="$1"
+    # 1. Try python3 socket test (works across all platforms if python3 is installed)
+    if command -v python3 &>/dev/null; then
+        if ! python3 -c "import socket, sys; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('0.0.0.0', int(sys.argv[1]))); s.close()" "$port" 2>/dev/null; then
+            return 0
+        fi
+        return 1
+    fi
+
+    # 2. Try ss (standard on modern Linux)
+    if command -v ss &>/dev/null; then
+        if ss -tuln 2>/dev/null | grep -qE "(:|\])${port}\b"; then
+            return 0
+        fi
+    fi
+
+    # 3. Try lsof
+    if command -v lsof &>/dev/null; then
+        if lsof -iTCP:"${port}" -sTCP:LISTEN -P -n &>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # 4. Try netstat
+    if command -v netstat &>/dev/null; then
+        if netstat -tuln 2>/dev/null | grep -qE "(:|\])${port}\b"; then
+            return 0
+        fi
+    fi
+
+    # 5. Fallback via bash /dev/tcp check
+    if (exec 3<>/dev/tcp/127.0.0.1/"${port}") 2>/dev/null; then
+        exec 3>&- 2>/dev/null || true
+        exec 3<&- 2>/dev/null || true
+        return 0
+    fi
+
+    return 1
+}
+
+find_next_available_port() {
+    local candidate="$1"
+    while [ "$candidate" -le 65535 ]; do
+        if ! is_port_in_use "$candidate"; then
+            echo "$candidate"
+            return 0
+        fi
+        candidate=$((candidate + 1))
+    done
+    echo "$1"
+}
+
+DEFAULT_PORT=5003
+if is_port_in_use "$DEFAULT_PORT"; then
+    SUGGESTED_PORT=$(find_next_available_port $((DEFAULT_PORT + 1)))
+    echo -e "${YELLOW}Notice: Default port ${DEFAULT_PORT} is already in use on this host.${RESET}"
+    echo -e "Suggesting available port: ${CYAN}${SUGGESTED_PORT}${RESET}"
+    DEFAULT_PORT=${SUGGESTED_PORT}
+fi
+
+PORT=""
+while [ -z "$PORT" ]; do
+    read -p "Port to expose on host [${DEFAULT_PORT}]: " INPUT_PORT
+    CANDIDATE_PORT=${INPUT_PORT:-${DEFAULT_PORT}}
+
+    if ! [[ "$CANDIDATE_PORT" =~ ^[0-9]+$ ]] || [ "$CANDIDATE_PORT" -lt 1 ] || [ "$CANDIDATE_PORT" -gt 65535 ]; then
+        echo -e "${RED}Error: Port must be a valid number between 1 and 65535.${RESET}"
+        continue
+    fi
+
+    if is_port_in_use "$CANDIDATE_PORT"; then
+        echo -e "${YELLOW}Warning: Port ${CANDIDATE_PORT} is currently in use by another process.${RESET}"
+        SUGGESTED=$(find_next_available_port $((CANDIDATE_PORT + 1)))
+        echo -e "Please enter another port (suggested available: ${CYAN}${SUGGESTED}${RESET})."
+        DEFAULT_PORT=${SUGGESTED}
+    else
+        PORT=${CANDIDATE_PORT}
+        echo -e "${GREEN}✓ Port ${PORT} is available.${RESET}"
+    fi
+done
 
 read -p "Host Media Directory [./media]: " INPUT_MEDIA
 MEDIA_DIR=${INPUT_MEDIA:-./media}
 
 read -p "Host Downloads Directory [./media/downloads]: " INPUT_DOWNLOADS
 DOWNLOADS_DIR=${INPUT_DOWNLOADS:-./media/downloads}
+
+normalize_compose_path() {
+    local p="$1"
+    if [[ "$p" =~ ^\./(.*) ]]; then
+        echo "../${BASH_REMATCH[1]}"
+    elif [[ "$p" != /* && "$p" != ../* ]]; then
+        echo "../$p"
+    else
+        echo "$p"
+    fi
+}
+
+COMPOSE_DATA_DIR="../data"
+COMPOSE_MEDIA_DIR=$(normalize_compose_path "${MEDIA_DIR}")
+COMPOSE_DOWNLOADS_DIR=$(normalize_compose_path "${DOWNLOADS_DIR}")
 
 # ------------------------------------------------------------------------------
 # Step 12: Write .env Configuration File
@@ -220,9 +329,9 @@ echo -e "\n${CYAN}[12/16] Writing configuration (.env)...${RESET}"
 cat > "${ROOT_DIR}/.env.tmp" <<EOF
 PORT=${PORT}
 ASPNETCORE_ENVIRONMENT=Production
-DATA_DIR=./data
-MEDIA_DIR=${MEDIA_DIR}
-DOWNLOADS_DIR=${DOWNLOADS_DIR}
+DATA_DIR=${COMPOSE_DATA_DIR}
+MEDIA_DIR=${COMPOSE_MEDIA_DIR}
+DOWNLOADS_DIR=${COMPOSE_DOWNLOADS_DIR}
 CORS_ALLOWED_ORIGINS=http://localhost:${PORT},http://127.0.0.1:${PORT}
 
 ENABLE_TORRENT=${ENABLE_TORRENT}
@@ -240,6 +349,7 @@ EOF
 
 mv -f "${ROOT_DIR}/.env.tmp" "${ROOT_DIR}/.env"
 chmod 600 "${ROOT_DIR}/.env"
+ln -sf "${ROOT_DIR}/.env" "${DEPLOY_DIR}/.env" 2>/dev/null || true
 echo -e "${GREEN}✓ .env written securely.${RESET}"
 
 # ------------------------------------------------------------------------------
@@ -256,7 +366,9 @@ echo -e "${GREEN}✓ Configuration validated successfully.${RESET}"
 # Step 14: Start Docker Services
 # ------------------------------------------------------------------------------
 echo -e "\n${CYAN}[14/16] Launching Docker services...${RESET}"
-COMPOSE_ARGS=("-f" "${DEPLOY_DIR}/docker-compose.yml")
+docker network inspect mytube-network >/dev/null 2>&1 || docker network create mytube-network >/dev/null 2>&1 || true
+
+COMPOSE_ARGS=("--env-file" "${ROOT_DIR}/.env" "-f" "${DEPLOY_DIR}/docker-compose.yml")
 
 if [ "$ENABLE_TORRENT" = true ]; then
     COMPOSE_ARGS+=("-f" "${DEPLOY_DIR}/docker-compose.torrent.yml")

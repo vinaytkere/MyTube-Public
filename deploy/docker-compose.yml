@@ -1,3 +1,5 @@
+name: mytube
+
 services:
   mytube:
     build:
@@ -17,9 +19,11 @@ services:
       - SECRETS_PATH=/run/secrets
       - Cors__AllowedOrigins__0=http://localhost:${PORT:-5003}
       - Cors__AllowedOrigins__1=http://127.0.0.1:${PORT:-5003}
+      - Auth__DefaultAdmin__Username=${Auth__DefaultAdmin__Username:-}
+      - Auth__DefaultAdmin__Password=${Auth__DefaultAdmin__Password:-}
     volumes:
-      - ${DATA_DIR:-./data}:/app/data
-      - ${MEDIA_DIR:-./media}:/app/media
+      - ${DATA_DIR:-../data}:/app/data
+      - ${MEDIA_DIR:-../media}:/app/media
     secrets:
       - jwt_secret
       - optional_encryption_key

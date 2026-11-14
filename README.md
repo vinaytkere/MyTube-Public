@@ -81,7 +81,7 @@ If you are running in a headless CI/CD environment or prefer managing containers
 
 ### Step 1: Create Host Storage Directories
 ```bash
-mkdir -p data media downloads secrets backups
+mkdir -p data data/keys media media/downloads deploy/secrets data/backups
 ```
 
 ### Step 2: Configure Environment Variables
@@ -91,30 +91,38 @@ cp .env.example .env
 ```
 Key configuration settings in `.env`:
 ```env
-APP_PORT=5003
-DATA_PATH=./data
-MEDIA_PATH=./media
-DOWNLOADS_PATH=./downloads
-ALLOWED_CORS_ORIGINS=http://localhost:5003
+PORT=5003
+DATA_DIR=../data
+MEDIA_DIR=../media
+DOWNLOADS_DIR=../media/downloads
+CORS_ALLOWED_ORIGINS=http://localhost:5003,http://127.0.0.1:5003
 ```
 
 ### Step 3: Generate Security Secrets
-MyTube mounts sensitive keys via Docker secrets at `/run/secrets/`. Generate a secure 256-bit JWT secret (minimum 32 characters):
+MyTube mounts sensitive keys via Docker secrets at `/run/secrets/`. Generate the required JWT signing key and application encryption key:
 
 ```bash
 # On Linux / macOS
-openssl rand -hex 32 > secrets/jwt_secret.secret
-chmod 600 secrets/jwt_secret.secret
+openssl rand -hex 32 > deploy/secrets/jwt_secret.txt
+openssl rand -hex 32 > deploy/secrets/encryption_key.txt
+touch deploy/secrets/gemini_api_key.txt deploy/secrets/groq_api_key.txt deploy/secrets/deepseek_api_key.txt deploy/secrets/wireguard_private_key.txt
+chmod 600 deploy/secrets/*.txt
 
 # On Windows (PowerShell)
-[System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32) | ForEach-Object { "{0:x2}" -f $_ } | Out-File -FilePath secrets/jwt_secret.secret -Encoding ascii -NoNewline
+function New-Secret { [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32) | ForEach-Object { "{0:x2}" -f $_ } }
+(New-Secret) | Out-File -FilePath deploy/secrets/jwt_secret.txt -Encoding ascii -NoNewline
+(New-Secret) | Out-File -FilePath deploy/secrets/encryption_key.txt -Encoding ascii -NoNewline
+"" | Out-File -FilePath deploy/secrets/gemini_api_key.txt -Encoding ascii -NoNewline
+"" | Out-File -FilePath deploy/secrets/groq_api_key.txt -Encoding ascii -NoNewline
+"" | Out-File -FilePath deploy/secrets/deepseek_api_key.txt -Encoding ascii -NoNewline
+"" | Out-File -FilePath deploy/secrets/wireguard_private_key.txt -Encoding ascii -NoNewline
 ```
 
 ### Step 4: Launch Containers
 
 **1. Core Stack Only (Web UI, API, Downloader, SQLite):**
 ```bash
-docker compose -f deploy/docker-compose.yml up -d
+docker compose up -d
 ```
 
 **2. Core Stack + WireGuard Torrent Client (Gluetun + Transmission):**

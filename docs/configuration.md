@@ -10,35 +10,34 @@ MyTube uses a hybrid configuration model:
 
 | Variable | Default Value | Description |
 | -------- | ------------- | ----------- |
-| `APP_PORT` | `5003` | Host port on which MyTube web dashboard and API listen. |
+| `PORT` | `5003` | Host port on which MyTube web dashboard and API listen. |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | ASP.NET Core environment mode (`Production` or `Development`). |
-| `DATA_PATH` | `./data` | Host path for persistent application data, SQLite database, and keys. |
-| `MEDIA_PATH` | `./media` | Host path where your organized video/media library resides. |
-| `DOWNLOADS_PATH` | `./downloads` | Host path where in-progress and completed downloads are saved. |
-| `ALLOWED_CORS_ORIGINS` | `http://localhost:5003` | Comma-separated list of allowed CORS origins for API requests. |
-| `AI_PROVIDER` | `none` | Default AI provider: `none`, `gemini`, `groq`, `deepseek`, or `ollama`. |
-| `OLLAMA_ENDPOINT` | `http://host.docker.internal:11434` | Endpoint URL when using local Ollama for AI metadata. |
-| `VPN_SERVICE_PROVIDER` | `custom` | Gluetun VPN provider (e.g., `mullvad`, `protonvpn`, `nordvpn`, `custom`). |
-| `SERVER_COUNTRIES` | `Netherlands` | Country selection for commercial VPN providers. |
-| `JELLYFIN_PORT` | `8096` | Host port for optional Jellyfin media server. |
+| `DATA_DIR` | `../data` | Path to persistent application data, SQLite database, and keys (relative to deploy/ or absolute). |
+| `MEDIA_DIR` | `../media` | Path to host media library (relative to deploy/ or absolute). |
+| `DOWNLOADS_DIR` | `../media/downloads` | Path to torrent and direct download staging directory. |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5003,http://127.0.0.1:5003` | Comma-separated list of allowed CORS origins for API requests. |
+| `ENABLE_TORRENT` | `false` | Set to `true` to launch Gluetun WireGuard VPN + Transmission torrent client. |
+| `ENABLE_JELLYFIN` | `false` | Set to `true` to launch integrated Jellyfin streaming server. |
+| `ENABLE_AI` | `false` | Set to `true` to enable AI media features. |
+| `VPN_PROVIDER` | `custom` | Gluetun VPN provider (e.g. `mullvad`, `protonvpn`, `ivpn`, `airvpn`, `custom`). |
+| `VPN_WIREGUARD_ADDRESSES` | `10.2.0.2/32` | WireGuard client assigned IP/CIDR. |
+| `Auth__DefaultAdmin__Username` | | Pre-configured username for the initial Administrator account. |
+| `Auth__DefaultAdmin__Password` | | Pre-configured password for the initial Administrator account. |
 
 ---
 
 ## 2. Docker Compose Secrets (`/run/secrets/`)
 
-All sensitive values should be placed inside individual files in the `secrets/` directory on the host machine. The Docker Compose configuration mounts these files into the container at `/run/secrets/<secret_name>`.
+All sensitive values are placed inside individual files in the `deploy/secrets/` directory on the host machine. The Docker Compose configuration mounts these files into the container at `/run/secrets/<secret_name>`.
 
 | Secret File | Container Secret Mount | Description |
 | ----------- | ---------------------- | ----------- |
-| `secrets/jwt_secret.secret` | `/run/secrets/jwt_secret` | **Required.** Cryptographic signing secret for user authentication tokens. Must be at least 32 characters (256 bits). |
-| `secrets/app_encryption_key.secret` | `/run/secrets/app_encryption_key` | Optional. Key used for symmetric data encryption. |
-| `secrets/gemini_api_key.secret` | `/run/secrets/gemini_api_key` | Optional. Google Gemini API key for AI summaries and video categorization. |
-| `secrets/groq_api_key.secret` | `/run/secrets/groq_api_key` | Optional. Groq Cloud API key for ultra-fast Llama-based video summarization. |
-| `secrets/deepseek_api_key.secret` | `/run/secrets/deepseek_api_key` | Optional. DeepSeek API key for intelligent tagging and media extraction. |
-| `secrets/wireguard_private_key.secret` | `/run/secrets/wireguard_private_key` | Required when torrent VPN is enabled. WireGuard client private key. |
-| `secrets/wireguard_addresses.secret` | `/run/secrets/wireguard_addresses` | Required when torrent VPN is enabled. WireGuard client assigned IP (e.g. `10.2.0.2/32`). |
-| `secrets/transmission_user.secret` | `/run/secrets/transmission_user` | Optional. Custom username for Transmission RPC interface. |
-| `secrets/transmission_pass.secret` | `/run/secrets/transmission_pass` | Optional. Custom password for Transmission RPC interface. |
+| `deploy/secrets/jwt_secret.txt` | `/run/secrets/jwt_secret` | **Required.** Cryptographic signing secret for user authentication tokens. Minimum 32 characters. |
+| `deploy/secrets/encryption_key.txt` | `/run/secrets/optional_encryption_key` | Optional. Key used for symmetric data encryption. |
+| `deploy/secrets/gemini_api_key.txt` | `/run/secrets/optional_gemini_api_key` | Optional. Google Gemini API key for AI summaries and video categorization. |
+| `deploy/secrets/groq_api_key.txt` | `/run/secrets/optional_groq_api_key` | Optional. Groq Cloud API key for Llama and Whisper STT. |
+| `deploy/secrets/deepseek_api_key.txt` | `/run/secrets/optional_deepseek_api_key` | Optional. DeepSeek API key for intelligent tagging. |
+| `deploy/secrets/wireguard_private_key.txt` | `/run/secrets/wireguard_private_key` | Required when torrent VPN is enabled. WireGuard client private key. |
 
 ---
 

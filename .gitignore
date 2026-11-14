@@ -24,7 +24,9 @@ dist-ssr/
 *.sln.docstates
 
 # Secrets and environment configs
-secrets/
+/secrets/
+/deploy/secrets/*
+!/deploy/secrets/.gitkeep
 *.secret
 .env
 .env.local

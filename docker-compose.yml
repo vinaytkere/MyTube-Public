@@ -1,0 +1,5 @@
+name: mytube
+
+include:
+  - deploy/docker-compose.yml
+

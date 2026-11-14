@@ -15,8 +15,8 @@ The container runs as an unprivileged user (`mytube`, UID `1000`, GID `1000`), b
 ### Resolution:
 Assign ownership of the application data directories to UID 1000 on the host:
 ```bash
-sudo chown -R 1000:1000 data media downloads secrets
-sudo chmod -R 750 data media downloads secrets
+sudo chown -R 1000:1000 data media deploy/secrets
+sudo chmod -R 775 data media
 ```
 
 ---
@@ -37,11 +37,11 @@ Docker returns an error similar to `Error response from daemon: driver failed pr
    ```
 2. Change the host port in your `.env` file:
    ```env
-   APP_PORT=5050
+   PORT=5050
    ```
 3. Restart the containers:
    ```bash
-   docker compose -f deploy/docker-compose.yml up -d
+   docker compose up -d
    ```
 
 ---
@@ -71,7 +71,7 @@ Multiple operations attempting simultaneous writes without sufficient busy-timeo
 Gluetun logs show `wireguard handshake timeout` or `cannot configure wg0`.
 
 ### Resolution:
-1. **Verify Secret Contents:** Ensure `secrets/wireguard_private_key.secret` and `secrets/wireguard_addresses.secret` do not contain trailing spaces or newlines.
+1. **Verify Secret Contents:** Ensure `deploy/secrets/wireguard_private_key.txt` and `VPN_WIREGUARD_ADDRESSES` in `.env` do not contain trailing spaces or newlines.
 2. **TUN Device Permissions:** Gluetun requires access to `/dev/net/tun` and the `NET_ADMIN` capability. Check that `deploy/docker-compose.torrent.yml` includes:
    ```yaml
    cap_add:

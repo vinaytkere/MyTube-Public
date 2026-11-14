@@ -57,6 +57,12 @@ New-Item -ItemType Directory -Force -Path "$RootDir\data\keys" | Out-Null
 New-Item -ItemType Directory -Force -Path "$RootDir\media" | Out-Null
 New-Item -ItemType Directory -Force -Path "$RootDir\media\downloads" | Out-Null
 New-Item -ItemType Directory -Force -Path $SecretsDir | Out-Null
+if ((Test-Path "$DeployDir\data") -and (Get-ChildItem "$DeployDir\data" -Force | Measure-Object).Count -eq 0) {
+    Remove-Item -Path "$DeployDir\data" -Force -Recurse -ErrorAction SilentlyContinue
+}
+if ((Test-Path "$DeployDir\media") -and (Get-ChildItem "$DeployDir\media" -Force | Measure-Object).Count -eq 0) {
+    Remove-Item -Path "$DeployDir\media" -Force -Recurse -ErrorAction SilentlyContinue
+}
 Write-Host "✓ Directories created successfully." -ForegroundColor Green
 
 # 4. Generate Cryptographic Keys
@@ -150,8 +156,64 @@ if ($enableTorrent -eq "true") {
 
 # 11. Paths and Port
 Write-Host "`n[11/16] Path and Port Configuration" -ForegroundColor Cyan
-$portIn = Read-Host "Port to expose on host [5003]"
-$port = if ($portIn) { $portIn } else { "5003" }
+
+function Test-PortAvailable([int]$p) {
+    if ($p -lt 1 -or $p -gt 65535) { return $false }
+    try {
+        $tcpListeners = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+        if ($tcpListeners | Where-Object { $_.Port -eq $p }) {
+            return $false
+        }
+    } catch { }
+
+    try {
+        $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Any, $p)
+        $listener.Start()
+        $listener.Stop()
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Find-NextAvailablePort([int]$startPort) {
+    $candidate = $startPort
+    while ($candidate -le 65535) {
+        if (Test-PortAvailable $candidate) { return $candidate }
+        $candidate++
+    }
+    return $startPort
+}
+
+$defaultPort = 5003
+if (-not (Test-PortAvailable $defaultPort)) {
+    $suggestedPort = Find-NextAvailablePort ($defaultPort + 1)
+    Write-Host "Notice: Default port $defaultPort is already in use on this host." -ForegroundColor Yellow
+    Write-Host "Suggesting available port: $suggestedPort" -ForegroundColor Cyan
+    $defaultPort = $suggestedPort
+}
+
+$port = $null
+while ($null -eq $port) {
+    $portIn = Read-Host "Port to expose on host [$defaultPort]"
+    $candidate = if ([string]::IsNullOrWhiteSpace($portIn)) { $defaultPort } else { $portIn }
+
+    $parsedPort = 0
+    if (-not [int]::TryParse($candidate, [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
+        Write-Host "Error: Port must be a valid number between 1 and 65535." -ForegroundColor Red
+        continue
+    }
+
+    if (-not (Test-PortAvailable $parsedPort)) {
+        Write-Host "Warning: Port $parsedPort is currently in use by another process." -ForegroundColor Yellow
+        $nextFree = Find-NextAvailablePort ($parsedPort + 1)
+        Write-Host "Please choose another port (suggested available: $nextFree)." -ForegroundColor DarkGray
+        $defaultPort = $nextFree
+    } else {
+        $port = $parsedPort
+        Write-Host "✓ Port $port is available." -ForegroundColor Green
+    }
+}
 
 $mediaIn = Read-Host "Host Media Directory [./media]"
 $mediaDir = if ($mediaIn) { $mediaIn } else { "./media" }
@@ -159,14 +221,28 @@ $mediaDir = if ($mediaIn) { $mediaIn } else { "./media" }
 $downIn = Read-Host "Host Downloads Directory [./media/downloads]"
 $downDir = if ($downIn) { $downIn } else { "./media/downloads" }
 
+function Normalize-ComposePath([string]$p) {
+    if ($p.StartsWith("./") -or $p.StartsWith(".\")) {
+        return "../" + $p.Substring(2).Replace("\", "/")
+    }
+    if (-not [System.IO.Path]::IsPathRooted($p) -and -not $p.StartsWith("../") -and -not $p.StartsWith("..\")) {
+        return "../" + $p.Replace("\", "/")
+    }
+    return $p.Replace("\", "/")
+}
+
+$composeDataDir = "../data"
+$composeMediaDir = Normalize-ComposePath $mediaDir
+$composeDownDir = Normalize-ComposePath $downDir
+
 # 12. Write .env
 Write-Host "`n[12/16] Writing configuration (.env)..." -ForegroundColor Cyan
 $envContent = @"
 PORT=$port
 ASPNETCORE_ENVIRONMENT=Production
-DATA_DIR=./data
-MEDIA_DIR=$mediaDir
-DOWNLOADS_DIR=$downDir
+DATA_DIR=$composeDataDir
+MEDIA_DIR=$composeMediaDir
+DOWNLOADS_DIR=$composeDownDir
 CORS_ALLOWED_ORIGINS=http://localhost:$port,http://127.0.0.1:$port
 
 ENABLE_TORRENT=$enableTorrent
@@ -183,6 +259,9 @@ Auth__DefaultAdmin__Password=$adminPass
 "@
 
 $envContent | Out-File -FilePath "$RootDir\.env" -Encoding ascii
+try {
+    Copy-Item -Path "$RootDir\.env" -Destination "$DeployDir\.env" -Force -ErrorAction SilentlyContinue
+} catch {}
 Write-Host "✓ .env written successfully." -ForegroundColor Green
 
 # 13. Validate
@@ -195,7 +274,12 @@ Write-Host "✓ Configuration validated successfully." -ForegroundColor Green
 
 # 14. Start Docker
 Write-Host "`n[14/16] Launching Docker services..." -ForegroundColor Cyan
-$composeArgs = @("-f", "$DeployDir\docker-compose.yml")
+& docker network inspect mytube-network 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & docker network create mytube-network 2>$null | Out-Null
+}
+
+$composeArgs = @("--env-file", "$RootDir\.env", "-f", "$DeployDir\docker-compose.yml")
 if ($enableTorrent -eq "true") {
     $composeArgs += @("-f", "$DeployDir\docker-compose.torrent.yml")
 }

@@ -14,7 +14,15 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
 RESTORE_SOURCE="$1"
+if [[ "$RESTORE_SOURCE" != /* ]]; then
+    RESTORE_SOURCE="$(pwd)/${RESTORE_SOURCE}"
+fi
+
+cd "${ROOT_DIR}"
 
 if [ ! -f "$RESTORE_SOURCE" ]; then
     echo "❌ Error: Backup file '$RESTORE_SOURCE' does not exist."

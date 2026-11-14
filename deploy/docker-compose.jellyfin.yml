@@ -8,13 +8,14 @@ services:
     environment:
       - JELLYFIN_PublishedServerUrl=http://localhost:8096
     volumes:
-      - ${DATA_DIR:-./data}/jellyfin-config:/config
-      - ${DATA_DIR:-./data}/jellyfin-cache:/cache
-      - ${MEDIA_DIR:-./media}:/media:ro
+      - ${DATA_DIR:-../data}/jellyfin-config:/config
+      - ${DATA_DIR:-../data}/jellyfin-cache:/cache
+      - ${MEDIA_DIR:-../media}:/media:ro
     networks:
       - mytube-network
 
 networks:
   mytube-network:
-    external: true
+    name: mytube-network
+    driver: bridge
 

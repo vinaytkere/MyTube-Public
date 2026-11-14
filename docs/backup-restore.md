@@ -31,7 +31,7 @@ chmod +x deploy/scripts/backup.sh
 ### What is Included in the Backup Archive?
 - **SQLite Database:** A consolidated snapshot of `mytube.db`.
 - **Data Protection Keys:** `/app/data/keys` containing ASP.NET Core cryptographic keys.
-- **Secrets Directory:** `secrets/*.secret` (JWT keys, API credentials).
+- **Secrets Directory:** `deploy/secrets/*.txt` (JWT keys, API credentials).
 - **Environment Configuration:** Current `.env` file.
 
 The resulting archive is saved as a timestamped tarball in `./backups/mytube-backup-YYYYMMDD_HHMMSS.tar.gz`.
