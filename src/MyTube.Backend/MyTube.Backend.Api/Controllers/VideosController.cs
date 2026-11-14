@@ -33,7 +33,8 @@ public class VideosController : ControllerBase
     private string GetBaseUrl()
     {
         var scheme = Request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? Request.Scheme;
-        return $"{scheme}://{Request.Host}";
+        var host = Request.Headers["X-Forwarded-Host"].FirstOrDefault() ?? Request.Host.Value;
+        return $"{scheme}://{host}";
     }
 
     [HttpGet]
@@ -122,6 +123,10 @@ public class VideosController : ControllerBase
 
         var ext = Path.GetExtension(filePath).ToLowerInvariant();
 
+        Response.Headers["Access-Control-Allow-Origin"] = "*";
+        Response.Headers["Access-Control-Allow-Headers"] = "Range, Origin, Content-Type, Accept";
+        Response.Headers["Access-Control-Expose-Headers"] = "Content-Length, Content-Range, Accept-Ranges, Content-Type";
+
         // If natively supported format, stream directly using physical ranges
         if ((ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".mp3" || ext == ".m4a" || ext == ".opus" || ext == ".wav" || ext == ".flac" || ext == ".aac") && (!audioTrack.HasValue || audioTrack.Value == 0))
         {
@@ -165,9 +170,13 @@ public class VideosController : ControllerBase
                         video.FileName.Contains("aac", StringComparison.OrdinalIgnoreCase));
         var acodec = isAac ? "copy" : "aac -b:a 192k";
 
+        var hasVideo = (video.Width > 0 && video.Height > 0) ||
+                       (!string.IsNullOrWhiteSpace(video.VideoCodec) && !video.VideoCodec.Equals("none", StringComparison.OrdinalIgnoreCase));
+        var videoMap = hasVideo ? "-map 0:v:0" : "-vn";
+
         var args = start > 0
-            ? $"-ss {startSecondsStr} -i \"{filePath}\" -map 0:v:0 {audioMap} -sn -c:v {vcodec} -c:a {acodec} -avoid_negative_ts make_zero -f mp4 -movflags frag_keyframe+empty_moov+default_base_moof pipe:1"
-            : $"-i \"{filePath}\" -map 0:v:0 {audioMap} -sn -c:v {vcodec} -c:a {acodec} -f mp4 -movflags frag_keyframe+empty_moov+default_base_moof pipe:1";
+            ? $"-nostdin -ss {startSecondsStr} -i \"{filePath}\" {videoMap} {audioMap} -sn {(hasVideo ? $"-c:v {vcodec} " : "")}-c:a {acodec} -avoid_negative_ts make_zero -f mp4 -movflags frag_keyframe+empty_moov+default_base_moof pipe:1"
+            : $"-nostdin -i \"{filePath}\" {videoMap} {audioMap} -sn {(hasVideo ? $"-c:v {vcodec} " : "")}-c:a {acodec} -f mp4 -movflags frag_keyframe+empty_moov+default_base_moof pipe:1";
 
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
@@ -201,7 +210,7 @@ public class VideosController : ControllerBase
         {
             if (!process.HasExited)
             {
-                try { process.Kill(); } catch { }
+                try { process.Kill(true); } catch { }
             }
             process.Dispose();
         }
@@ -299,10 +308,16 @@ public class VideosController : ControllerBase
         }
 
         var baseName = Path.GetFileNameWithoutExtension(filePath);
-        var subFiles = Directory.GetFiles(dir, $"{baseName}*.*")
-            .Where(f => f.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(f => f)
+        var subFiles = Directory.GetFiles(dir, "*.*")
+            .Where(f => (f.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+                        && Path.GetFileName(f).StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => f.Contains("-orig", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(f => f.Length)
+            .ThenBy(f => f)
             .ToList();
+
+        Response.Headers["Access-Control-Allow-Origin"] = "*";
+        Response.Headers["Access-Control-Allow-Headers"] = "Range, Origin, Content-Type, Accept";
 
         if (trackIndex >= 0 && trackIndex < subFiles.Count)
         {

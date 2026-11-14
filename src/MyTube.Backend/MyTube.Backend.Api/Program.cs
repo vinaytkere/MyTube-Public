@@ -115,6 +115,48 @@ app.UseStatusCodePages();
 
 app.UseForwardedHeaders();
 
+// Bulletproof CORS middleware guaranteeing Access-Control-Allow-Origin & SignalR headers on all endpoints, range streams, and OPTIONS preflights
+app.Use(async (context, next) =>
+{
+    var origin = context.Request.Headers["Origin"].ToString();
+    var allowedOrigin = !string.IsNullOrWhiteSpace(origin) ? origin : "*";
+
+    context.Response.OnStarting(() =>
+    {
+        if (!context.Response.Headers.ContainsKey("Access-Control-Allow-Origin"))
+        {
+            context.Response.Headers["Access-Control-Allow-Origin"] = allowedOrigin;
+        }
+        if (allowedOrigin != "*")
+        {
+            context.Response.Headers["Access-Control-Allow-Credentials"] = "true";
+        }
+        context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD";
+        context.Response.Headers["Access-Control-Expose-Headers"] = "Content-Length, Content-Range, Accept-Ranges, Content-Type";
+
+        var reqHeaders = context.Request.Headers["Access-Control-Request-Headers"].ToString();
+        if (!string.IsNullOrWhiteSpace(reqHeaders))
+        {
+            context.Response.Headers["Access-Control-Allow-Headers"] = reqHeaders;
+        }
+        else
+        {
+            context.Response.Headers["Access-Control-Allow-Headers"] = "x-requested-with, x-signalr-user-agent, content-type, authorization, accept, origin, user-agent, range";
+        }
+
+        return Task.CompletedTask;
+    });
+
+    if (context.Request.Method == "OPTIONS")
+    {
+        context.Response.StatusCode = 200;
+        await context.Response.WriteAsync("OK");
+        return;
+    }
+
+    await next();
+});
+
 app.UseCors("AllowFrontend");
 
 // Serve frontend SPA static assets (Single Container deployment)

@@ -13,7 +13,7 @@ import {
   IptvChannel, IptvFilterOptions, IptvSyncStatus
 } from '../types';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5003';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || '';
 
 class ApiService {
   private token: string | null = localStorage.getItem('mytube_token');

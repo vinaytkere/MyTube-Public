@@ -391,7 +391,7 @@ public class VideoService : IVideoService
             .ToList();
     }
 
-    private static VideoDto MapToDto(Video video, string userId, string baseUrl, WatchProgress? progress, bool isFavorite)
+    private VideoDto MapToDto(Video video, string userId, string baseUrl, WatchProgress? progress, bool isFavorite)
     {
         var audioTracks = new List<AudioTrackDto>();
         if (!string.IsNullOrEmpty(video.AudioTracksJson))
@@ -481,12 +481,12 @@ public class VideoService : IVideoService
         };
     }
 
-    private static List<SubtitleTrackDto> DiscoverSubtitleTracks(Video video, string baseUrl)
+    private List<SubtitleTrackDto> DiscoverSubtitleTracks(Video video, string baseUrl)
     {
         var tracks = new List<SubtitleTrackDto>();
         try
         {
-            var resolvedPath = ResolvePhysicalPath(video.FilePath);
+            var resolvedPath = _mediaProcessor?.ResolvePhysicalFilePath(video.FilePath) ?? ResolvePhysicalPath(video.FilePath);
             if (string.IsNullOrEmpty(resolvedPath) || !File.Exists(resolvedPath))
             {
                 return tracks;
@@ -497,8 +497,9 @@ public class VideoService : IVideoService
 
             var baseName = Path.GetFileNameWithoutExtension(resolvedPath);
 
-            var subFiles = Directory.GetFiles(dir, $"{baseName}*.*")
-                .Where(f => f.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+            var subFiles = Directory.GetFiles(dir, "*.*")
+                .Where(f => (f.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+                            && Path.GetFileName(f).StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(f => f.Contains("-orig", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
                 .ThenBy(f => f.Length)
                 .ThenBy(f => f)
@@ -538,23 +539,61 @@ public class VideoService : IVideoService
         return tracks;
     }
 
-    private static string ResolvePhysicalPath(string filePath)
+    private string ResolvePhysicalPath(string filePath)
     {
+        if (string.IsNullOrWhiteSpace(filePath)) return string.Empty;
+
+        var normalizedPath = filePath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        if (File.Exists(normalizedPath)) return normalizedPath;
         if (File.Exists(filePath)) return filePath;
-        var fileName = Path.GetFileName(filePath);
-        var searchDirs = new[]
+
+        try
         {
-            "./media",
-            "/media",
-            "/app/media",
-            Path.Combine(Directory.GetCurrentDirectory(), "media"),
-            Directory.GetCurrentDirectory()
-        };
-        foreach (var dir in searchDirs)
-        {
-            var candidate = Path.Combine(dir, fileName);
-            if (File.Exists(candidate)) return candidate;
+            var fileName = Path.GetFileName(normalizedPath);
+            if (string.IsNullOrWhiteSpace(fileName)) return filePath;
+
+            var searchDirs = new[]
+            {
+                _mediaRoot,
+                "/media",
+                "/app/media",
+                Path.Combine(_mediaRoot, "Downloads"),
+                "/media/Downloads",
+                "/app/media/Downloads",
+                Path.Combine(Directory.GetCurrentDirectory(), "media"),
+                Path.Combine(Directory.GetCurrentDirectory(), "media", "Downloads"),
+                Directory.GetCurrentDirectory()
+            }.Where(d => !string.IsNullOrWhiteSpace(d) && Directory.Exists(d)).Distinct();
+
+            foreach (var dir in searchDirs)
+            {
+                var directCandidate = Path.Combine(dir, fileName);
+                if (File.Exists(directCandidate)) return directCandidate;
+
+                var candidates = Directory.GetFiles(dir, fileName, SearchOption.AllDirectories);
+                if (candidates.Length > 0) return candidates[0];
+
+                var targetStem = Path.GetFileNameWithoutExtension(fileName);
+                var targetNormalized = System.Text.RegularExpressions.Regex.Replace(targetStem, @"\s+", " ").Trim().ToLower();
+
+                var allFiles = Directory.GetFiles(dir, "*", SearchOption.AllDirectories);
+                foreach (var cand in allFiles)
+                {
+                    var candStem = Path.GetFileNameWithoutExtension(cand);
+                    var candNormalized = System.Text.RegularExpressions.Regex.Replace(candStem, @"\s+", " ").Trim().ToLower();
+
+                    if (candNormalized == targetNormalized || candNormalized.Contains(targetNormalized) || targetNormalized.Contains(candNormalized))
+                    {
+                        return cand;
+                    }
+                }
+            }
         }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "ResolvePhysicalPath error for {FilePath}", filePath);
+        }
+
         return filePath;
     }
 

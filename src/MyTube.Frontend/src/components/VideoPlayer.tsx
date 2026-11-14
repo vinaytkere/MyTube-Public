@@ -20,6 +20,24 @@ import { Badge } from '@mantine/core';
 import { Video } from '../types';
 import { api } from '../services/api';
 
+const resolveMediaUrl = (url: string | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('/')) return url;
+  try {
+    const parsed = new URL(url);
+    if ((parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+        typeof window !== 'undefined' &&
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1') {
+      return `${parsed.pathname}${parsed.search}`;
+    }
+    if (typeof window !== 'undefined' && parsed.host === window.location.host) {
+      return `${parsed.pathname}${parsed.search}`;
+    }
+  } catch { }
+  return url;
+};
+
 interface VideoPlayerProps {
   video: Video;
   onTimeUpdate?: (currentTime: number) => void;
@@ -66,14 +84,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
   const progressPercent = video.duration > 0 ? startPosition / video.duration : 0;
   const shouldResume = startPosition > 0 && progressPercent < 0.95;
 
-  const downloadUrl = video.downloadUrl || api.getVideoDownloadUrl(video.id);
+  const resolvedStreamUrl = useMemo(() => resolveMediaUrl(video.streamUrl), [video.streamUrl]);
+  const resolvedThumbnailUrl = useMemo(() => resolveMediaUrl(video.thumbnailUrl), [video.thumbnailUrl]);
+  const downloadUrl = useMemo(() => resolveMediaUrl(video.downloadUrl) || api.getVideoDownloadUrl(video.id), [video.downloadUrl, video.id]);
 
   // Source URL for playback
   const streamSrc = isNative
-    ? video.streamUrl 
+    ? resolvedStreamUrl 
     : (transcodeStart > 0 
-        ? `${video.streamUrl}?start=${Math.floor(transcodeStart)}&audioTrack=${selectedAudioTrack}` 
-        : `${video.streamUrl}?audioTrack=${selectedAudioTrack}`);
+        ? `${resolvedStreamUrl}?start=${Math.floor(transcodeStart)}&audioTrack=${selectedAudioTrack}` 
+        : `${resolvedStreamUrl}?audioTrack=${selectedAudioTrack}`);
 
   const mediaSource = useMemo(() => {
     let type = 'video/mp4';
@@ -298,9 +318,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
         <div className="w-full rounded-2xl overflow-hidden shadow-2xl border border-[#21242d] bg-[#0c0d12] p-6 flex flex-col items-center justify-center gap-6 relative">
           <div className="relative flex items-center justify-center my-2">
             <div className="w-40 h-40 rounded-full bg-gradient-to-tr from-[#3cd69b]/20 to-[#3cd69b]/5 flex items-center justify-center border-2 border-[#3cd69b]/30 shadow-2xl relative overflow-hidden group">
-              {video.thumbnailUrl ? (
+              {resolvedThumbnailUrl ? (
                 <img
-                  src={video.thumbnailUrl}
+                  src={resolvedThumbnailUrl}
                   alt={video.displayTitle}
                   className="w-full h-full object-cover rounded-full"
                 />
@@ -312,7 +332,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
 
           <div className="w-full max-w-2xl">
             <MediaPlayer
-              key={video.id}
+              key={`${video.id}-audio-${selectedAudioTrack}`}
               ref={playerRef}
               title={video.displayTitle}
               src={mediaSource}
@@ -334,7 +354,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
                 {video.subtitleTracks && video.subtitleTracks.length > 0 && video.subtitleTracks.map((sub, idx) => (
                   <Track
                     key={sub.id || sub.src || `track-${idx}`}
-                    src={sub.src}
+                    src={resolveMediaUrl(sub.src)}
                     kind="subtitles"
                     label={sub.label || 'Subtitles'}
                     lang={sub.language || 'en'}
@@ -359,11 +379,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
           isPortrait ? 'max-w-[440px] mx-auto aspect-[9/16] max-h-[78vh]' : 'aspect-video'
         }`}>
           <MediaPlayer
-            key={video.id}
+            key={`${video.id}-audio-${selectedAudioTrack}`}
             ref={playerRef}
             title={video.displayTitle}
             src={mediaSource}
-            poster={video.thumbnailUrl}
+            poster={resolvedThumbnailUrl}
             viewType="video"
             aspectRatio={videoAspectRatio}
             fullscreenOrientation={isPortrait ? 'portrait' : 'landscape'}
@@ -383,17 +403,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onTimeUpdate })
             className="w-full h-full"
           >
             <MediaProvider>
-              {video.thumbnailUrl && (
+              {resolvedThumbnailUrl && (
                 <Poster
                   className="vds-poster"
-                  src={video.thumbnailUrl}
+                  src={resolvedThumbnailUrl}
                   alt={video.displayTitle}
                 />
               )}
               {video.subtitleTracks && video.subtitleTracks.length > 0 && video.subtitleTracks.map((sub, idx) => (
                 <Track
                   key={sub.id || sub.src || `track-${idx}`}
-                  src={sub.src}
+                  src={resolveMediaUrl(sub.src)}
                   kind="subtitles"
                   label={sub.label || 'Subtitles'}
                   lang={sub.language || 'en'}

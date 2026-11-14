@@ -292,17 +292,27 @@ public class FfmpegMediaProcessor : IMediaProcessor
 
     public string ResolvePhysicalFilePath(string filePath)
     {
+        if (string.IsNullOrWhiteSpace(filePath)) return string.Empty;
+
+        var normalizedPath = filePath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        if (File.Exists(normalizedPath)) return normalizedPath;
         if (File.Exists(filePath)) return filePath;
 
         try
         {
-            var fileName = Path.GetFileName(filePath);
+            var fileName = Path.GetFileName(normalizedPath);
+            if (string.IsNullOrWhiteSpace(fileName)) return filePath;
+
             var searchDirs = new[]
             {
                 _mediaRoot,
                 "/media",
                 "/app/media",
+                Path.Combine(_mediaRoot, "Downloads"),
+                "/media/Downloads",
+                "/app/media/Downloads",
                 Path.Combine(Directory.GetCurrentDirectory(), "media"),
+                Path.Combine(Directory.GetCurrentDirectory(), "media", "Downloads"),
                 Directory.GetCurrentDirectory()
             }.Where(d => !string.IsNullOrWhiteSpace(d) && Directory.Exists(d)).Distinct();
 
@@ -399,17 +409,13 @@ public class FfmpegMediaProcessor : IMediaProcessor
                 for (int i = 0; i < audioStreams.Count; i++)
                 {
                     var s = audioStreams[i];
-                    var lang = s.Tags != null && s.Tags.TryGetValue("language", out var l) ? l : "";
+                    var lang = GetTagValue(s.Tags, "language") ?? "";
 
                     string? trackTitle = null;
-                    if (s.Tags != null)
+                    var titleCandidate = GetTagValue(s.Tags, "title") ?? GetTagValue(s.Tags, "name") ?? GetTagValue(s.Tags, "handler_name");
+                    if (!string.IsNullOrWhiteSpace(titleCandidate) && !IsInternalHandlerName(titleCandidate))
                     {
-                        if (s.Tags.TryGetValue("title", out var t) && !string.IsNullOrWhiteSpace(t) && !IsInternalHandlerName(t))
-                            trackTitle = t.Trim();
-                        else if (s.Tags.TryGetValue("name", out var n) && !string.IsNullOrWhiteSpace(n) && !IsInternalHandlerName(n))
-                            trackTitle = n.Trim();
-                        else if (s.Tags.TryGetValue("handler_name", out var h) && !string.IsNullOrWhiteSpace(h) && !IsInternalHandlerName(h))
-                            trackTitle = h.Trim();
+                        trackTitle = titleCandidate.Trim();
                     }
 
                     var displayTitle = !string.IsNullOrWhiteSpace(trackTitle)
@@ -427,11 +433,10 @@ public class FfmpegMediaProcessor : IMediaProcessor
                 metadata.AudioTracks = audioTracks;
             }
 
-            if (probeResult.Format?.Tags != null &&
-                probeResult.Format.Tags.TryGetValue("title", out var title) &&
-                !string.IsNullOrWhiteSpace(title))
+            var formatTitle = GetTagValue(probeResult.Format?.Tags, "title");
+            if (!string.IsNullOrWhiteSpace(formatTitle))
             {
-                metadata.DisplayTitle = title;
+                metadata.DisplayTitle = formatTitle;
             }
 
             if (string.IsNullOrWhiteSpace(metadata.DisplayTitle))
@@ -545,6 +550,12 @@ public class FfmpegMediaProcessor : IMediaProcessor
         Array.Sort(createdChunks);
         resultChunks.AddRange(createdChunks);
         return resultChunks;
+    }
+
+    private static string? GetTagValue(Dictionary<string, string>? tags, string key)
+    {
+        if (tags == null) return null;
+        return tags.FirstOrDefault(kvp => string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase)).Value;
     }
 
     private static string FormatFileNameToTitle(string fileName)

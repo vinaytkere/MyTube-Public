@@ -29,7 +29,7 @@ class LiveSubtitleService {
   private subtitleCallback: ((packet: LiveSubtitlePacket) => void) | null = null;
 
   private getHubUrl(): string {
-    const base = (import.meta.env.VITE_API_BASE_URL as string) || (import.meta.env.VITE_API_URL as string) || API_BASE_URL || 'http://localhost:5003';
+    const base = (import.meta.env.VITE_API_BASE_URL as string) || (import.meta.env.VITE_API_URL as string) || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5003');
     return `${base.replace(/\/$/, '')}/hubs/live-subtitles`;
   }
 
